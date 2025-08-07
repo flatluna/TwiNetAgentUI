@@ -1,0 +1,343 @@
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { 
+    User,
+    GraduationCap, 
+    Home, 
+    Users, 
+    Heart, 
+    Briefcase,
+    Camera,
+    Plane,
+    Gift,
+    Coffee,
+    Activity,
+    MapPin,
+    ChevronRight,
+    FolderOpen,
+    Phone
+} from "lucide-react";
+
+const TwinBiografiaPage: React.FC = () => {
+    const navigate = useNavigate();
+
+    // BLOQUE 1: INFORMACIÓN ESTRUCTURADA (Datos estáticos)
+    const informacionEstructurada = [
+        {
+            category: "Información Personal",
+            color: "bg-blue-500",
+            items: [
+                {
+                    id: "datos-personales",
+                    title: "Datos Personales",
+                    description: "Información básica, contacto, identificación",
+                    icon: User,
+                    path: "/twin-biografia/datos-personales",
+                    progress: 0
+                },
+                {
+                    id: "familia",
+                    title: "Mi Familia",
+                    description: "Padres, hermanos, hijos, familia extendida",
+                    icon: Users,
+                    path: "/twin-biografia/familia",
+                    progress: 0
+                },
+                {
+                    id: "contactos",
+                    title: "Contactos",
+                    description: "Amigos, colegas, contactos importantes",
+                    icon: Phone,
+                    path: "/twin-biografia/contactos",
+                    progress: 0
+                },
+                {
+                    id: "fotos-familiares",
+                    title: "Fotos Familiares",
+                    description: "Álbum de fotos de familia y eventos importantes",
+                    icon: Camera,
+                    path: "/twin-biografia/fotos",
+                    progress: 0
+                },
+                {
+                    id: "archivos-personales",
+                    title: "Tus archivos personales",
+                    description: "Documentos, certificados, archivos importantes",
+                    icon: FolderOpen,
+                    path: "/twin-biografia/archivos-personales",
+                    progress: 0
+                }
+            ]
+        },
+        {
+            category: "Carrera & Educación",
+            color: "bg-green-500",
+            items: [
+                {
+                    id: "educacion",
+                    title: "Educación",
+                    description: "Estudios, universidades, certificaciones",
+                    icon: GraduationCap,
+                    path: "/twin-biografia/educacion",
+                    progress: 0
+                },
+                {
+                    id: "carrera",
+                    title: "Carrera Profesional",
+                    description: "Trabajos, empresas, proyectos, logros",
+                    icon: Briefcase,
+                    path: "/twin-biografia/carrera",
+                    progress: 0
+                }
+            ]
+        },
+        {
+            category: "Lugares & Vivienda",
+            color: "bg-orange-500",
+            items: [
+                {
+                    id: "lugares-vivido",
+                    title: "Lugares donde he Vivido",
+                    description: "Casas, ciudades, países, mudanzas",
+                    icon: Home,
+                    path: "/twin-biografia/lugares",
+                    progress: 0
+                },
+                {
+                    id: "relaciones",
+                    title: "Relaciones & Parejas",
+                    description: "Historia de relaciones, matrimonios",
+                    icon: Heart,
+                    path: "/twin-biografia/relaciones",
+                    progress: 0
+                }
+            ]
+        }
+    ];
+
+    // BLOQUE 2: CRONOLOGÍA DE EVENTOS (Historia día a día)
+    const cronologiaEventos = [
+        {
+            category: "Eventos de Vida",
+            color: "bg-purple-500",
+            items: [
+                {
+                    id: "viajes",
+                    title: "Viajes",
+                    description: "Vacaciones, viajes de trabajo, aventuras",
+                    icon: Plane,
+                    path: "/twin-biografia/eventos/viajes",
+                    progress: 0
+                },
+                {
+                    id: "cumpleanos",
+                    title: "Cumpleaños",
+                    description: "Celebraciones de cumpleaños memorables",
+                    icon: Gift,
+                    path: "/twin-biografia/eventos/cumpleanos",
+                    progress: 0
+                },
+                {
+                    id: "trabajo-eventos",
+                    title: "Eventos de Trabajo",
+                    description: "Conferencias, reuniones importantes, logros",
+                    icon: Briefcase,
+                    path: "/twin-biografia/eventos/trabajo",
+                    progress: 0
+                }
+            ]
+        },
+        {
+            category: "Eventos Casuales",
+            color: "bg-teal-500",
+            items: [
+                {
+                    id: "actividades-diarias",
+                    title: "Actividades Diarias",
+                    description: "Rutinas, hobbies, ejercicio",
+                    icon: Activity,
+                    path: "/twin-biografia/eventos/diarias",
+                    progress: 0
+                },
+                {
+                    id: "eventos-sociales",
+                    title: "Eventos Sociales",
+                    description: "Salidas con amigos, fiestas, reuniones",
+                    icon: Coffee,
+                    path: "/twin-biografia/eventos/sociales",
+                    progress: 0
+                },
+                {
+                    id: "momentos-especiales",
+                    title: "Momentos Especiales",
+                    description: "Comprar mascota, pasear perrito, ir a misa",
+                    icon: MapPin,
+                    path: "/twin-biografia/eventos/especiales",
+                    progress: 0
+                }
+            ]
+        }
+    ];
+
+    const handleNavigateToSection = (path: string) => {
+        navigate(path);
+    };
+
+    const calculateCategoryProgress = (items: any[]) => {
+        const totalProgress = items.reduce((sum, item) => sum + item.progress, 0);
+        return Math.round(totalProgress / items.length);
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-50 p-6">
+            <div className="max-w-6xl mx-auto">
+                {/* Header */}
+                <div className="text-center mb-8">
+                    <h1 className="text-4xl font-bold text-gray-800 mb-4">
+                        Tu Historia Humana Completa
+                    </h1>
+                    <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                        Documenta tu vida completa: información personal, carrera y todos los eventos que han marcado tu historia
+                    </p>
+                </div>
+
+                {/* BLOQUE 1: INFORMACIÓN ESTRUCTURADA */}
+                <div className="mb-12">
+                    <div className="flex items-center mb-6">
+                        <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold mr-3">
+                            1
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-800">
+                            Información Estructurada
+                        </h2>
+                    </div>
+                    <p className="text-gray-600 mb-6 ml-11">
+                        Datos permanentes sobre ti: información personal, familia, educación, carrera y lugares donde has vivido
+                    </p>
+
+                    <div className="grid gap-8 ml-11">
+                        {informacionEstructurada.map((section) => (
+                            <div key={section.category} className="bg-white rounded-lg shadow-md p-6">
+                                <div className="flex items-center mb-4">
+                                    <div className={`w-4 h-4 rounded-full ${section.color} mr-3`}></div>
+                                    <h3 className="text-xl font-semibold text-gray-800">{section.category}</h3>
+                                    <div className="ml-auto text-sm text-gray-500">
+                                        {calculateCategoryProgress(section.items)}% completado
+                                    </div>
+                                </div>
+                                
+                                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {section.items.map((item) => {
+                                        const IconComponent = item.icon;
+                                        return (
+                                            <div
+                                                key={item.id}
+                                                onClick={() => handleNavigateToSection(item.path)}
+                                                className="p-4 border border-gray-200 rounded-lg hover:shadow-md hover:border-blue-300 cursor-pointer transition-all group"
+                                            >
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <div className={`p-2 rounded-lg ${section.color} bg-opacity-10`}>
+                                                        <IconComponent className={`w-5 h-5 text-gray-700`} />
+                                                    </div>
+                                                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                                                </div>
+                                                <h4 className="font-medium text-gray-800 mb-1">{item.title}</h4>
+                                                <p className="text-sm text-gray-600 mb-3">{item.description}</p>
+                                                
+                                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                                    <div 
+                                                        className={`h-2 rounded-full ${section.color}`}
+                                                        style={{ width: `${item.progress}%` }}
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* BLOQUE 2: CRONOLOGÍA DE EVENTOS */}
+                <div className="mb-12">
+                    <div className="flex items-center mb-6">
+                        <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold mr-3">
+                            2
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-800">
+                            Historia Día a Día
+                        </h2>
+                    </div>
+                    <p className="text-gray-600 mb-6 ml-11">
+                        Cronología de eventos: viajes, cumpleaños, trabajo y momentos casuales que han marcado tu vida
+                    </p>
+
+                    <div className="grid gap-8 ml-11">
+                        {cronologiaEventos.map((section) => (
+                            <div key={section.category} className="bg-white rounded-lg shadow-md p-6">
+                                <div className="flex items-center mb-4">
+                                    <div className={`w-4 h-4 rounded-full ${section.color} mr-3`}></div>
+                                    <h3 className="text-xl font-semibold text-gray-800">{section.category}</h3>
+                                    <div className="ml-auto text-sm text-gray-500">
+                                        {calculateCategoryProgress(section.items)}% completado
+                                    </div>
+                                </div>
+                                
+                                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {section.items.map((item) => {
+                                        const IconComponent = item.icon;
+                                        return (
+                                            <div
+                                                key={item.id}
+                                                onClick={() => handleNavigateToSection(item.path)}
+                                                className="p-4 border border-gray-200 rounded-lg hover:shadow-md hover:border-purple-300 cursor-pointer transition-all group"
+                                            >
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <div className={`p-2 rounded-lg ${section.color} bg-opacity-10`}>
+                                                        <IconComponent className={`w-5 h-5 text-gray-700`} />
+                                                    </div>
+                                                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-purple-500 transition-colors" />
+                                                </div>
+                                                <h4 className="font-medium text-gray-800 mb-1">{item.title}</h4>
+                                                <p className="text-sm text-gray-600 mb-3">{item.description}</p>
+                                                
+                                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                                    <div 
+                                                        className={`h-2 rounded-full ${section.color}`}
+                                                        style={{ width: `${item.progress}%` }}
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="text-center">
+                    <Button
+                        onClick={() => navigate("/")}
+                        variant="outline"
+                        size="lg"
+                        className="mr-4"
+                    >
+                        Volver al Inicio
+                    </Button>
+                    <Button
+                        size="lg"
+                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                    >
+                        Comenzar Mi Historia
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default TwinBiografiaPage;

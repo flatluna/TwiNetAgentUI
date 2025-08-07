@@ -1,0 +1,374 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    font-family: "Segoe UI", Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    
+    /* Better font rendering for light themes */
+    font-weight: 400;
+    font-variation-settings: "wght" 400;
+}
+
+/* Enhanced font rendering for dark themes */
+.dark, .dark-blue {
+    /* Improve font clarity in dark mode */
+    -webkit-font-smoothing: subpixel-antialiased;
+    -moz-osx-font-smoothing: auto;
+    
+    /* Make fonts slightly bolder and clearer in dark mode */
+    font-weight: 450;
+    font-variation-settings: "wght" 450;
+    
+    /* Better letter spacing for readability */
+    letter-spacing: 0.01em;
+    
+    /* Improved text contrast */
+    text-shadow: 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+@layer base {
+    :root {
+        --background: 0 0% 100%;
+        --foreground: 0 0% 3.9%;
+        --card: 0 0% 100%;
+        --card-foreground: 0 0% 3.9%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 0 0% 3.9%;
+        --primary: 0 0% 9%;
+        --primary-foreground: 0 0% 98%;
+        --secondary: 0 0% 96.1%;
+        --secondary-foreground: 0 0% 9%;
+        --muted: 0 0% 96.1%;
+        --muted-foreground: 0 0% 45.1%;
+        --accent: 0 0% 96.1%;
+        --accent-foreground: 0 0% 9%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 0 0% 89.8%;
+        --input: 0 0% 89.8%;
+        --ring: 0 0% 3.9%;
+        --chart-1: 12 76% 61%;
+        --chart-2: 173 58% 39%;
+        --chart-3: 197 37% 24%;
+        --chart-4: 43 74% 66%;
+        --chart-5: 27 87% 67%;
+        --radius: 0.5rem;
+    }
+    .dark {
+        /* Dark Gray Theme - Better contrast and fonts */
+        --background: 220 13% 11%;        
+        --foreground: 210 20% 99%;        /* Even brighter text */
+        --card: 220 13% 14%;              
+        --card-foreground: 210 20% 99%;   /* Brighter card text */
+        --popover: 220 13% 14%;
+        --popover-foreground: 210 20% 99%;
+        --primary: 217 91% 65%;           /* Slightly brighter blue */
+        --primary-foreground: 210 20% 99%;
+        --secondary: 220 13% 18%;         
+        --secondary-foreground: 210 20% 99%;
+        --muted: 220 13% 18%;             
+        --muted-foreground: 215 20% 75%;  /* Much brighter muted text */
+        --accent: 220 13% 18%;
+        --accent-foreground: 210 20% 99%;
+        --destructive: 0 62.8% 60%;       
+        --destructive-foreground: 210 20% 99%;
+        --border: 220 13% 22%;            /* Lighter borders */
+        --input: 220 13% 18%;             
+        --ring: 217 91% 65%;              
+        --chart-1: 217 91% 60%;
+        --chart-2: 142 71% 45%;
+        --chart-3: 047 96% 53%;
+        --chart-4: 280 87% 65%;
+        --chart-5: 340 82% 62%;
+    }
+
+    .dark-blue {
+        /* Dark Blue Theme - Professional with clear fonts */
+        --background: 213 27% 8%;         
+        --foreground: 210 40% 99%;        /* Brightest white text */
+        --card: 213 27% 11%;              
+        --card-foreground: 210 40% 99%;   /* Brightest card text */
+        --popover: 213 27% 11%;
+        --popover-foreground: 210 40% 99%;
+        --primary: 210 100% 60%;          /* Brighter blue */
+        --primary-foreground: 0 0% 100%;
+        --secondary: 213 27% 15%;         
+        --secondary-foreground: 210 40% 99%;
+        --muted: 213 27% 18%;             /* Lighter muted background for better hover contrast */
+        --muted-foreground: 215 16% 85%;  /* Even brighter muted text */
+        --accent: 213 27% 15%;
+        --accent-foreground: 210 40% 99%;
+        --destructive: 359 100% 70%;      
+        --destructive-foreground: 210 40% 99%;
+        --border: 213 27% 20%;            /* Lighter borders */
+        --input: 213 27% 15%;             
+        --ring: 210 100% 60%;             
+        --chart-1: 210 100% 56%;
+        --chart-2: 142 71% 45%;
+        --chart-3: 047 96% 53%;
+        --chart-4: 280 87% 65%;
+        --chart-5: 340 82% 62%;
+    }
+
+/* Font weight utilities for dark themes */
+.dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6,
+.dark-blue h1, .dark-blue h2, .dark-blue h3, .dark-blue h4, .dark-blue h5, .dark-blue h6 {
+    font-weight: 600; /* Semi-bold headings in dark mode */
+    letter-spacing: 0.02em;
+}
+
+.dark .text-sm, .dark .text-xs,
+.dark-blue .text-sm, .dark-blue .text-xs {
+    font-weight: 500; /* Medium weight for small text */
+    letter-spacing: 0.015em;
+}
+
+.dark .font-medium,
+.dark-blue .font-medium {
+    font-weight: 600; /* Boost medium to semi-bold */
+}
+
+.dark .font-semibold,
+.dark-blue .font-semibold {
+    font-weight: 700; /* Boost semi-bold to bold */
+}
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+/* Custom utilities for better dark mode readability */
+@layer utilities {
+    .text-clear-dark {
+        @apply text-foreground;
+        font-weight: 500;
+        letter-spacing: 0.01em;
+    }
+    
+    .dark .text-clear-dark, .dark-blue .text-clear-dark {
+        color: rgb(255 255 255 / 0.95);
+        font-weight: 550;
+        letter-spacing: 0.015em;
+        text-shadow: 0 0 1px rgba(255, 255, 255, 0.1);
+    }
+    
+    .heading-clear-dark {
+        @apply text-foreground font-semibold;
+    }
+    
+    .dark .heading-clear-dark, .dark-blue .heading-clear-dark {
+        color: rgb(255 255 255 / 0.98);
+        font-weight: 650;
+        letter-spacing: 0.02em;
+        text-shadow: 0 0 1px rgba(255, 255, 255, 0.15);
+    }
+}
+
+/* Form element enhancements for dark themes */
+@layer utilities {
+    .dark select,
+    .dark input[type="text"],
+    .dark input[type="email"], 
+    .dark input[type="password"],
+    .dark textarea,
+    .dark-blue select,
+    .dark-blue input[type="text"],
+    .dark-blue input[type="email"],
+    .dark-blue input[type="password"],
+    .dark-blue textarea {
+        color: rgb(255 255 255 / 0.95) !important;
+        background-color: var(--background) !important;
+        border-color: var(--border) !important;
+    }
+
+    .dark select option,
+    .dark-blue select option {
+        color: rgb(255 255 255 / 0.95) !important;
+        background-color: var(--popover) !important;
+    }
+    
+    /* Enhanced select dropdown styling for dark themes */
+    .dark select,
+    .dark-blue select {
+        color: rgb(255 255 255 / 0.95) !important;
+        background-color: var(--background) !important;
+    }
+    
+    /* Force option elements to be visible in dark themes */
+    select option {
+        color: inherit !important;
+        background-color: inherit !important;
+    }
+    
+    .dark select option,
+    .dark-blue select option {
+        color: rgb(255 255 255 / 0.95) !important;
+        background-color: rgb(30 30 30) !important;
+    }
+    
+    /* Additional browser-specific fixes for select options */
+    .dark select,
+    .dark-blue select {
+        color-scheme: dark !important;
+    }
+    
+    @supports (-webkit-appearance: none) {
+        .dark select option,
+        .dark-blue select option {
+            background: rgb(30 30 30) !important;
+            color: rgb(255 255 255 / 0.95) !important;
+        }
+    }
+    
+    .dark select:focus,
+    .dark input:focus,
+    .dark textarea:focus,
+    .dark-blue select:focus,
+    .dark-blue input:focus,
+    .dark-blue textarea:focus {
+        border-color: var(--ring) !important;
+        box-shadow: 0 0 0 2px var(--ring) !important;
+    }
+
+    /* Global text improvements for dark themes - fallback for unupdated components */
+    .dark *:not(.text-white):not(.text-blue-600):not(.text-green-600):not(.text-purple-600):not(.text-yellow-600):not(.text-red-600) {
+        color: rgb(255 255 255 / 0.9) !important;
+    }
+    
+    .dark-blue *:not(.text-white):not(.text-blue-600):not(.text-green-600):not(.text-purple-600):not(.text-yellow-600):not(.text-red-600) {
+        color: rgb(255 255 255 / 0.9) !important;
+    }
+
+    /* Specific improvements for gray text in dark themes */
+    .dark .text-gray-800,
+    .dark .text-gray-700,
+    .dark .text-gray-600,
+    .dark .text-gray-500,
+    .dark-blue .text-gray-800,
+    .dark-blue .text-gray-700,
+    .dark-blue .text-gray-600,
+    .dark-blue .text-gray-500 {
+        color: rgb(255 255 255 / 0.9) !important;
+        font-weight: 500 !important;
+    }
+
+    /* Background improvements for dark themes */
+    .dark .bg-white,
+    .dark-blue .bg-white {
+        background-color: var(--card) !important;
+        border: 1px solid var(--border) !important;
+    }
+
+    .dark .bg-gray-50,
+    .dark .bg-gray-100,
+    .dark-blue .bg-gray-50,
+    .dark-blue .bg-gray-100 {
+        background-color: var(--muted) !important;
+    }
+
+    /* Enhanced sidebar hover states for dark themes - MORE SPECIFIC SELECTORS */
+    .dark .bg-card nav div:hover,
+    .dark-blue .bg-card nav div:hover {
+        background-color: var(--muted) !important;
+    }
+
+    .dark .bg-card nav div:hover,
+    .dark .bg-card nav div:hover *,
+    .dark-blue .bg-card nav div:hover,
+    .dark-blue .bg-card nav div:hover * {
+        color: var(--foreground) !important;
+        font-weight: 500 !important;
+    }
+
+    /* Improve sidebar text visibility on hover - SIDEBAR ONLY */
+    .dark .bg-card nav div:hover .text-clear-dark,
+    .dark-blue .bg-card nav div:hover .text-clear-dark {
+        color: var(--foreground) !important;
+        text-shadow: none !important;
+    }
+
+    /* Override any competing Tailwind classes for dark-blue theme - SIDEBAR ONLY */
+    .dark-blue .bg-card nav [class*="cursor-pointer"]:hover {
+        background-color: hsl(var(--muted)) !important;
+        color: hsl(var(--foreground)) !important;
+    }
+
+    .dark-blue .bg-card nav [class*="cursor-pointer"]:hover * {
+        color: hsl(var(--foreground)) !important;
+    }
+
+    /* Better submenu hover for dark-blue - SIDEBAR ONLY */
+    .dark-blue .bg-card nav [class*="ml-6"] div:hover {
+        background-color: hsl(var(--muted)) !important;
+        color: hsl(var(--foreground)) !important;
+    }
+
+    /* Protect theme cards and other content from sidebar rules */
+    .dark button[class*="bg-card"]:not(:hover),
+    .dark-blue button[class*="bg-card"]:not(:hover) {
+        background-color: hsl(var(--card)) !important;
+        color: hsl(var(--card-foreground)) !important;
+    }
+
+    .dark [class*="grid"] button[class*="bg-card"],
+    .dark-blue [class*="grid"] button[class*="bg-card"] {
+        background-color: hsl(var(--card)) !important;
+        color: hsl(var(--card-foreground)) !important;
+    }
+
+    /* Ensure theme cards maintain proper styling */
+    .dark [class*="grid"] button[class*="bg-card"]:hover,
+    .dark-blue [class*="grid"] button[class*="bg-card"]:hover {
+        background-color: hsl(var(--muted) / 0.5) !important;
+    }
+
+    /* Specific protection for configuration page theme cards */
+    .dark .space-y-4 button,
+    .dark-blue .space-y-4 button {
+        background-color: hsl(var(--card)) !important;
+        border: 1px solid hsl(var(--border)) !important;
+    }
+
+    .dark .space-y-4 button:hover,
+    .dark-blue .space-y-4 button:hover {
+        background-color: hsl(var(--muted) / 0.5) !important;
+        border-color: hsl(var(--border)) !important;
+    }
+
+    /* Theme cards specific styling */
+    .dark .theme-card,
+    .dark-blue .theme-card {
+        background-color: hsl(var(--card)) !important;
+        color: hsl(var(--card-foreground)) !important;
+        border: 1px solid hsl(var(--border)) !important;
+    }
+
+    .dark .theme-card:hover,
+    .dark-blue .theme-card:hover {
+        background-color: hsl(var(--muted) / 0.5) !important;
+        border-color: rgb(59 130 246 / 0.5) !important; /* blue-500 with opacity */
+    }
+
+    .dark .theme-card:not(.border-blue-500),
+    .dark-blue .theme-card:not(.border-blue-500) {
+        background-color: hsl(var(--card)) !important;
+    }
+
+    .dark .theme-card.border-blue-500,
+    .dark-blue .theme-card.border-blue-500 {
+        background-color: rgb(59 130 246 / 0.1) !important; /* blue-500/10 for selected state */
+        border-color: rgb(59 130 246) !important;
+    }
+}
