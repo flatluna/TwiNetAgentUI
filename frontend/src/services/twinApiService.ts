@@ -1675,6 +1675,70 @@ class TwinApiService {
     }
 
     /**
+     * Upload resume/CV for a twin
+     */
+    async uploadResume(twinId: string, resumeFile: File, fileName?: string): Promise<ApiResponse<{
+        message: string,
+        fileName: string,
+        filePath: string,
+        fileSize: number,
+        uploadTime: string
+    }>> {
+        console.log('💼 API Service - Uploading resume for twin:', twinId);
+        console.log('📄 Resume file details:', {
+            name: resumeFile.name,
+            size: resumeFile.size,
+            type: resumeFile.type,
+            lastModified: resumeFile.lastModified
+        });
+        
+        // Validate file type
+        const allowedTypes = [
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'text/plain'
+        ];
+        
+        if (!allowedTypes.includes(resumeFile.type)) {
+            throw new Error('Invalid file type. Supported formats: PDF, DOC, DOCX, TXT');
+        }
+        
+        const formData = new FormData();
+        
+        // Create a new File object with custom filename if provided
+        const fileToUpload = fileName ? new File([resumeFile], fileName, { type: resumeFile.type }) : resumeFile;
+        
+        // Append the resume file - backend expects 'resume', 'file', or 'document'
+        formData.append('resume', fileToUpload);
+        
+        // Optionally append custom fileName for backend processing
+        if (fileName) {
+            formData.append('fileName', fileName);
+        }
+        
+        console.log('📝 FormData contents:');
+        for (let pair of formData.entries()) {
+            console.log(`  ${pair[0]}:`, pair[1]);
+        }
+
+        return this.makeRequest<{
+            message: string,
+            fileName: string,
+            filePath: string,
+            fileSize: number,
+            uploadTime: string
+        }>(`/api/twins/${twinId}/work/upload-resume`, {
+            method: 'POST',
+            body: formData,
+            // Don't set Content-Type header for FormData - browser will set it automatically with boundary
+            headers: {
+                'X-API-Key': API_KEY
+            }
+        });
+    }
+
+    /**
      * Test API connectivity
      */
     async testConnection(): Promise<ApiResponse<any>> {

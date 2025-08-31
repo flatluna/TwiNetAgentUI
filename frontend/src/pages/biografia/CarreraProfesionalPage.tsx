@@ -1,6 +1,8 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useMsal } from "@azure/msal-react";
 import { Button } from "@/components/ui/button";
+import { twinApiService } from "@/services/twinApiService";
 import { 
     Upload,
     FileText,
@@ -21,12 +23,22 @@ import {
 const CarreraProfesionalPage: React.FC = () => {
     const navigate = useNavigate();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const { accounts } = useMsal();
     
     // Estados para el manejo del CV/Resume
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [uploadMessage, setUploadMessage] = useState('');
+
+    // Get current user's twinId
+    const getCurrentTwinId = () => {
+        if (accounts.length > 0) {
+            const account = accounts[0];
+            return account.localAccountId;
+        }
+        return null;
+    };
 
     // Función para manejar la selección de archivo
     const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,7 +48,8 @@ const CarreraProfesionalPage: React.FC = () => {
             const allowedTypes = [
                 'application/pdf',
                 'application/msword',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'text/plain'
             ];
             
             if (allowedTypes.includes(file.type)) {
@@ -44,7 +57,7 @@ const CarreraProfesionalPage: React.FC = () => {
                 setUploadStatus('idle');
                 setUploadMessage('');
             } else {
-                alert('Por favor selecciona un archivo PDF o Word (.pdf, .doc, .docx)');
+                alert('Por favor selecciona un archivo válido (PDF, DOC, DOCX, TXT)');
                 event.target.value = '';
             }
         }
@@ -54,21 +67,50 @@ const CarreraProfesionalPage: React.FC = () => {
     const handleUploadResume = async () => {
         if (!selectedFile) return;
 
+        const twinId = getCurrentTwinId();
+        if (!twinId) {
+            setUploadStatus('error');
+            setUploadMessage('Error: No se pudo obtener la identidad del usuario.');
+            return;
+        }
+
         setIsUploading(true);
         try {
-            // TODO: Implementar la llamada al API para subir el CV
-            console.log('📄 Subiendo CV:', selectedFile.name);
+            console.log('� Subiendo CV:', selectedFile.name, 'para twin:', twinId);
             
-            // Simulación de upload por ahora
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Generate custom filename with timestamp
+            const fileExtension = selectedFile.name.split('.').pop();
+            const customFileName = `resume_${new Date().toISOString().slice(0,10)}.${fileExtension}`;
             
-            setUploadStatus('success');
-            setUploadMessage('CV subido exitosamente. ¡Listo para procesar con AI!');
+            console.log('📝 Custom filename:', customFileName);
+            
+            // Call the API service
+            const response = await twinApiService.uploadResume(twinId, selectedFile, customFileName);
+            
+            if (response.success && response.data) {
+                setUploadStatus('success');
+                setUploadMessage(`✅ CV subido exitosamente como "${response.data.fileName}". ¡Listo para procesar con AI!`);
+                console.log('🎉 Resume uploaded successfully:', response.data);
+            } else {
+                throw new Error(response.error || 'Error desconocido al subir el CV');
+            }
             
         } catch (error) {
             console.error('❌ Error subiendo CV:', error);
             setUploadStatus('error');
-            setUploadMessage('Error al subir el CV. Por favor intenta de nuevo.');
+            
+            let errorMessage = 'Error al subir el CV. Por favor intenta de nuevo.';
+            if (error instanceof Error) {
+                if (error.message.includes('Invalid file type')) {
+                    errorMessage = 'Formato de archivo no válido. Use PDF, DOC, DOCX o TXT.';
+                } else if (error.message.includes('network') || error.message.includes('fetch')) {
+                    errorMessage = 'Error de conexión. Verifica tu conexión a internet.';
+                } else {
+                    errorMessage = `Error: ${error.message}`;
+                }
+            }
+            
+            setUploadMessage(errorMessage);
         } finally {
             setIsUploading(false);
         }
@@ -150,7 +192,7 @@ const CarreraProfesionalPage: React.FC = () => {
                                         Arrastra tu CV aquí o haz clic para seleccionar
                                     </h3>
                                     <p className="text-gray-600 mb-4">
-                                        Formatos soportados: PDF, DOC, DOCX (máximo 10MB)
+                                        Formatos soportados: PDF, DOC, DOCX, TXT (máximo 10MB)
                                     </p>
                                     <Button
                                         onClick={openFileSelector}
@@ -223,7 +265,7 @@ const CarreraProfesionalPage: React.FC = () => {
                             <input
                                 ref={fileInputRef}
                                 type="file"
-                                accept=".pdf,.doc,.docx"
+                                accept=".pdf,.doc,.docx,.txt"
                                 onChange={handleFileSelect}
                                 className="hidden"
                             />
