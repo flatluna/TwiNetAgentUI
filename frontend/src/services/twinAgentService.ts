@@ -1,3 +1,23 @@
+interface ProcessQuestionRequest {
+  twinId: string;
+  question: string;
+  sessionId?: string;
+}
+
+interface ProcessQuestionResponse {
+  success: boolean;
+  result?: string;      // Campo Result del backend (contenido HTML/Markdown)
+  message: string;
+  sessionId: string;
+  statistics: any;
+  twinId: string;
+  agent_type?: string;
+  fileNames?: string[]; // Archivos encontrados por el agente
+  errorMessage?: string;
+  question?: string;    // Pregunta original
+  processedAt?: string; // Timestamp del procesamiento
+}
+
 interface TwinAgentResponse {
   success: boolean;
   message: string;
@@ -36,7 +56,7 @@ class TwinAgentClient {
   private baseUrl: string;
   private sessionId: string | null;
 
-  constructor(baseUrl: string = 'http://localhost:7072') {
+  constructor(baseUrl: string = 'http://localhost:7011') {
     this.baseUrl = baseUrl;
     this.sessionId = null;
   }
@@ -47,42 +67,51 @@ class TwinAgentClient {
     console.log('💬 Mensaje recibido:', message);
     
     try {
-      const url = `${this.baseUrl}/api/twins/${twinId}/agent-direct`;
+      const url = `${this.baseUrl}/api/ProcessQuestion`;
       console.log('🌐 URL COMPLETA LLAMADA:', url);
-      console.log('📤 PAYLOAD ENVIADO:', {
-        message: message,
-        session_id: this.sessionId
-      });
+      
+      const request: ProcessQuestionRequest = {
+        twinId: twinId,
+        question: message,
+        sessionId: this.sessionId || undefined
+      };
+      
+      console.log('📤 PAYLOAD ENVIADO:', request);
       
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          message: message,
-          session_id: this.sessionId
-        })
+        body: JSON.stringify(request)
       });
 
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: ProcessQuestionResponse = await response.json();
       console.log('📦 RESPUESTA COMPLETA DEL BACKEND (RAW):', data);
       console.log('🔍 ESTRUCTURA DE RESPUESTA:', Object.keys(data));
       
-      if (data.success) {
-        this.sessionId = data.session_id;
-        return {
-          success: data.success,
-          message: data.message,
-          sessionId: data.session_id,
-          statistics: data.session_statistics,
-          twinId: data.twin_id,
-          agent_type: data.agent_type,
-          fileNames: data.fileNames || [] // Incluir archivos encontrados
-        };
-      } else {
-        throw new Error(data.error || 'Error desconocido del TwinAgent');
+      if (!data.success) {
+        throw new Error(data.errorMessage || 'Unknown error occurred');
       }
+
+      // Update session ID if provided
+      if (data.sessionId) {
+        this.sessionId = data.sessionId;
+      }
+
+      return {
+        success: data.success,
+        message: data.message,
+        sessionId: data.sessionId,
+        statistics: data.statistics,
+        twinId: data.twinId,
+        agent_type: data.agent_type,
+        fileNames: data.fileNames || [] // Incluir archivos encontrados
+      };
     } catch (error) {
       console.error('❌ Error llamando al TwinAgent:', error);
       throw error;
@@ -101,4 +130,4 @@ class TwinAgentClient {
 }
 
 export default TwinAgentClient;
-export type { TwinAgentResponse, SessionStatistics };
+export type { TwinAgentResponse, SessionStatistics, ProcessQuestionRequest, ProcessQuestionResponse };

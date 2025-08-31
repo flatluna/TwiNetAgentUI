@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { twinApiService } from "@/services/twinApiService";
-import { documentApiService } from "@/services/documentApiService";
+import { documentApiService, type DocumentInfo } from "@/services/documentApiService";
 import { useMsal } from "@azure/msal-react";
 import { 
     ArrowLeft,
@@ -40,6 +40,7 @@ interface ArchivoPersonal {
     etiquetas: string[];
     estructura?: string; // Estructurado, semi-estructurado, no-estructurado
     subcategoria?: string; // Subcategoría específica de estructura
+    pages?: number; // Número de páginas del documento
     // Metadatos del documento del nuevo endpoint - ACTUALIZADOS con datos ricos
     documentMetadata?: {
         // Campos básicos de metadata
@@ -66,6 +67,32 @@ interface ArchivoPersonal {
         blobPath?: string; // Ruta del blob
         originalPath?: string; // Ruta original
         fileName?: string; // Nombre real del archivo
+        
+        // Campos específicos esperados por la UI
+        sasUrl?: string; // SAS URL específico para navegación
+        AiExecutiveSummaryHtml?: string; // Resumen ejecutivo HTML procesado por IA
+        
+        // Información específica de la factura (Document Intelligence)
+        vendorName?: string;
+        vendorNameConfidence?: number;
+        customerName?: string;
+        customerNameConfidence?: number;
+        invoiceNumber?: string;
+        invoiceDate?: string;
+        dueDate?: string;
+        subTotal?: number;
+        subTotalConfidence?: number;
+        totalTax?: number;
+        invoiceTotal?: number;
+        invoiceTotalConfidence?: number;
+        lineItemsCount?: number;
+        tablesCount?: number;
+        
+        // AI flags
+        hasAiExecutiveSummary?: boolean;
+        hasAiInvoiceAnalysis?: boolean;
+        hasAiCompleteAnalysis?: boolean;
+        aiDataFieldsCount?: number;
     };
     // Tipo detectado para filtrado local
     detectedType?: string; // factura, contrato, reporte, certificado, documento
@@ -141,6 +168,10 @@ const ArchivosPersonalesPage: React.FC = () => {
     const [isProcessingOrchestrator, setIsProcessingOrchestrator] = useState(false);
     const [orchestratorStatus, setOrchestratorStatus] = useState<string>('');
     const [orchestratorProgress, setOrchestratorProgress] = useState(0);
+    
+    // Estados para mostrar estadísticas del archivo procesado
+    const [mostrarEstadisticasArchivo, setMostrarEstadisticasArchivo] = useState(false);
+    const [datosArchivoProcesado, setDatosArchivoProcesado] = useState<any>(null);
     
     // Estados para filtrado local
     const [todosLosArchivos, setTodosLosArchivos] = useState<ArchivoPersonal[]>([]);
@@ -284,7 +315,16 @@ const ArchivosPersonalesPage: React.FC = () => {
     // UseEffect para recargar documentos cuando cambien los filtros específicos
     useEffect(() => {
         // No hacer nada si ya estamos cargando o si es la carga inicial
-        if (isLoading) return;
+        if (isLoading) {
+            console.log('🔄 Evitando recarga - ya está cargando');
+            return;
+        }
+        
+        // No hacer nada si no hay twin ID
+        if (!TWIN_ID_STORAGE) {
+            console.log('🔄 Evitando recarga - no hay twin ID');
+            return;
+        }
         
         // Verificar si es una solicitud duplicada (mismos parámetros dentro de 2 segundos)
         const now = Date.now();
@@ -309,8 +349,8 @@ const ArchivosPersonalesPage: React.FC = () => {
             localStorage.setItem('archivos_filtro_subcategoria', subcategoriaFiltro);
         }
         
-        // Solo recargar si se ha cargado la página al menos una vez (evitar carga duplicada)
-        if (archivos.length > 0) {
+        // SOLO recargar si se ha cargado la página al menos una vez Y los filtros han cambiado realmente
+        if (archivos.length > 0 && (lastRequest.estructura !== estructuraFiltro || lastRequest.subcategoria !== subcategoriaFiltro)) {
             // Recargar documentos con el endpoint unificado
             console.log(`🔄 Filtros cambiaron - Estructura: ${estructuraFiltro}, Subcategoría: ${subcategoriaFiltro}`);
             setIsLoading(true);
@@ -778,12 +818,29 @@ const ArchivosPersonalesPage: React.FC = () => {
 
     /**
      * Nueva función unificada para cargar todos los documentos usando el endpoint list-documents
-     * con metadatos y filtrado interno
+     * con metadatos y filtrado directo en el backend cuando sea posible
      */
     const loadAllTwinDocuments = async () => {
         try {
-            console.log(`📄 Cargando todos los documentos para twin: ${TWIN_ID_STORAGE}`);
-            const documents = await documentApiService.getAllTwinDocuments(TWIN_ID_STORAGE);
+            console.log(`📄 Cargando documentos para twin: ${TWIN_ID_STORAGE}`, { 
+                estructuraFiltro, 
+                subcategoriaFiltro 
+            });
+            
+            // Usar filtrado directo en el backend cuando ambos filtros están activos y no son "todas"
+            let documents: DocumentInfo[] = [];
+            
+            if (estructuraFiltro !== "todas" && subcategoriaFiltro !== "todas") {
+                console.log(`🎯 Usando filtrado directo en backend: ${estructuraFiltro}/${subcategoriaFiltro}`);
+                documents = await documentApiService.getAllTwinDocuments(
+                    TWIN_ID_STORAGE, 
+                    estructuraFiltro, 
+                    subcategoriaFiltro
+                );
+            } else {
+                console.log(`📋 Obteniendo todos los documentos (filtrado local si es necesario)`);
+                documents = await documentApiService.getAllTwinDocuments(TWIN_ID_STORAGE);
+            }
             
             console.log(`✅ Documentos obtenidos: ${documents.length} documentos`);
             
@@ -822,10 +879,11 @@ const ArchivosPersonalesPage: React.FC = () => {
                 const structureType = (metadata.structure_type || '').toLowerCase();
                 console.log(`🔍 Analyzing structure_type: "${structureType}" for document`);
                 
-                if (structureType.includes('structured') || structureType.includes('estructurado')) {
-                    return ESTRUCTURA_DOCUMENTOS.ESTRUCTURADO;
-                } else if (structureType.includes('semi')) {
+                // IMPORTANTE: Verificar 'semi' ANTES que 'structured' porque 'semi-structured' contiene ambos
+                if (structureType.includes('semi')) {
                     return ESTRUCTURA_DOCUMENTOS.SEMI_ESTRUCTURADO;
+                } else if (structureType.includes('structured') || structureType.includes('estructurado')) {
+                    return ESTRUCTURA_DOCUMENTOS.ESTRUCTURADO;
                 } else if (structureType.includes('unstructured') || structureType.includes('no-estructurado')) {
                     return ESTRUCTURA_DOCUMENTOS.NO_ESTRUCTURADO;
                 } else {
@@ -900,7 +958,7 @@ const ArchivosPersonalesPage: React.FC = () => {
                     
                     return {
                         id: doc.id || doc.filename || `doc-${index + 1}`, // Usar el ID real del documento primero
-                        nombre: doc.filename || `Documento ${index + 1}`,
+                        nombre: doc.filename ? doc.filename.split('/').pop() || doc.filename : `Documento ${index + 1}`, // ✅ EXTRAER SOLO EL NOMBRE DEL ARCHIVO
                         tipo: extension,
                         tamaño: doc.size_bytes || (metadata?.extracted_text?.length || 0),
                         fechaSubida: doc.last_modified || metadata?.created_at || new Date().toISOString(),
@@ -916,6 +974,7 @@ const ArchivosPersonalesPage: React.FC = () => {
                         ].filter((tag): tag is string => Boolean(tag)),
                         estructura: estructura,
                         subcategoria: metadata?.sub_category || metadata?.document_type || detectedType,
+                        pages: doc.pages || 1, // Agregar número de páginas
                         // Metadatos del documento
                         documentMetadata: metadata,
                         // Tipo detectado para filtrado local
@@ -1126,7 +1185,7 @@ const ArchivosPersonalesPage: React.FC = () => {
         }
         
         // Filtrar por factura específica si está seleccionado
-        if (facturaFiltro !== "todas" && estructuraFiltro === ESTRUCTURA_DOCUMENTOS.SEMI_ESTRUCTURADO && subcategoriaFiltro === 'factura') {
+        if (facturaFiltro !== "todas" && estructuraFiltro === ESTRUCTURA_DOCUMENTOS.SEMI_ESTRUCTURADO && subcategoriaFiltro === 'invoice') {
             const antesFactura = archivosFiltrados.length;
             archivosFiltrados = archivosFiltrados.filter(archivo => archivo.id === facturaFiltro);
             console.log(`� Después del filtro de factura específica: ${archivosFiltrados.length} de ${antesFactura} archivos`);
@@ -1164,13 +1223,13 @@ const ArchivosPersonalesPage: React.FC = () => {
     
     // Función para obtener lista de facturas disponibles para el combo de facturas
     const obtenerFacturasDisponibles = () => {
-        if (estructuraFiltro === ESTRUCTURA_DOCUMENTOS.SEMI_ESTRUCTURADO && subcategoriaFiltro === 'factura') {
+        if (estructuraFiltro === ESTRUCTURA_DOCUMENTOS.SEMI_ESTRUCTURADO && subcategoriaFiltro === 'invoice') {
             return archivos.filter(archivo => {
                 // Filtrar solo facturas/invoices con vendor information
                 const structuredData = archivo.documentMetadata?.structuredData;
                 const vendorName = structuredData?.vendor?.name;
                 const isInvoice = vendorName && (
-                    archivo.subcategoria === 'factura' ||
+                    archivo.subcategoria === 'invoice' ||
                     archivo.subcategoria === 'invoice' ||
                     archivo.nombre?.toLowerCase().includes('invoice') ||
                     archivo.nombre?.toLowerCase().includes('factura') ||
@@ -1206,6 +1265,12 @@ const ArchivosPersonalesPage: React.FC = () => {
 
     // useEffect para aplicar filtros cuando cambien los filtros o los documentos
     useEffect(() => {
+        // Evitar aplicar filtros si estamos cargando documentos
+        if (isLoading) {
+            console.log('🔄 Evitando aplicación de filtros - carga en progreso');
+            return;
+        }
+        
         if (todosLosArchivos.length > 0) {
             aplicarFiltrosLocales();
         }
@@ -1260,7 +1325,12 @@ const ArchivosPersonalesPage: React.FC = () => {
                         categoria: archivo.categoria,
                         fechaSubida: archivo.fechaSubida,
                         path: archivo.documentMetadata?.documentUrl || archivo.url,
-                        metadata: archivo.documentMetadata
+                        sasUrl: archivo.documentMetadata?.sasUrl,
+                        AiExecutiveSummaryHtml: archivo.documentMetadata?.AiExecutiveSummaryHtml,
+                        metadata: {
+                            ...archivo.documentMetadata,
+                            sasUrl: archivo.documentMetadata?.sasUrl
+                        }
                     },
                     twinId: TWIN_ID_STORAGE, // Usar la constante correcta
                     // Datos ricos en el formato que espera ArchivoDetalles.tsx
@@ -1299,6 +1369,12 @@ const ArchivosPersonalesPage: React.FC = () => {
     const handleOpenUploadModal = () => {
         resetUploadModalStates();
         setMostrarUploadOficial(true);
+    };
+
+    // Función para cerrar el modal de estadísticas del archivo procesado
+    const handleCloseEstadisticasModal = () => {
+        setMostrarEstadisticasArchivo(false);
+        setDatosArchivoProcesado(null);
     };
 
     const handleFileUpload = () => {
@@ -1417,31 +1493,43 @@ const ArchivosPersonalesPage: React.FC = () => {
                 const subcategoriaLabel = subcategoriaToLabel[subcategoriaFiltro] || subcategoriaFiltro;
                 console.log(`📂 Enviando al backend - Estructura: ${estructuraFiltro}, Subcategoría: ${subcategoriaLabel} (original: ${subcategoriaFiltro})`);
                 
+                // Obtener el label en español para usar en el directorio
+                const subcategoriaObj = SUBCATEGORIAS_ESTRUCTURA[estructuraFiltro]?.find(s => s.id === subcategoriaFiltro);
+                const subcategoriaParaDirectorio = subcategoriaObj?.label || subcategoriaLabel;
+                
                 // Para documentos semi-estructurados, usar el orchestrator
                 if (estructuraFiltro === ESTRUCTURA_DOCUMENTOS.SEMI_ESTRUCTURADO) {
-                    console.log(`🤖 Iniciando procesamiento con orchestrator para documento semi-estructurado: ${subcategoriaLabel}`);
-                    console.log(`🔍 Valores para orchestrator:`, {
+                    console.log(`📄 Subiendo documento semi-estructurado SIN orchestrator: ${subcategoriaLabel}`);
+                    console.log(`🔍 Valores para upload directo:`, {
                         twinId: TWIN_ID_STORAGE,
                         fileName: file.name,
                         fileSize: file.size,
-                        subCategory: subcategoriaFiltro,
+                        subCategory: subcategoriaParaDirectorio,
                         estructura: estructuraFiltro
                     });
                     
-                    response = await documentApiService.startPDFProcessingOrchestrator(
-                        TWIN_ID_STORAGE,
-                        file,
-                        subcategoriaFiltro, // Usar el valor original (invoice, license, etc.)
-                        estructuraFiltro    // Pasar la estructura (semi-estructurado)
-                    );
-                    console.log(`🔄 Orchestrator iniciado, response:`, response);
-                } else {
-                    // Para documentos estructurados y no-estructurados, usar el método tradicional
+                    // TEMPORALMENTE: Usar upload directo en lugar de orchestrator
                     response = await documentApiService.uploadStructuredDocument(
                         TWIN_ID_STORAGE,
                         file,
-                        estructuraFiltro,
-                        subcategoriaLabel
+                        subcategoriaParaDirectorio, // Usar el label en español
+                        estructuraFiltro
+                    );
+                    console.log(`✅ Upload directo completado, response:`, response);
+                } else {
+                    // Para documentos estructurados y no-estructurados, usar el método tradicional
+                    
+                    // Obtener el label en español para usar en el directorio
+                    const subcategoriaObj = SUBCATEGORIAS_ESTRUCTURA[estructuraFiltro]?.find(s => s.id === subcategoriaFiltro);
+                    const subcategoriaParaDirectorio = subcategoriaObj?.label || subcategoriaFiltro;
+                    
+                    console.log(`📊 Subiendo documento ${estructuraFiltro} con subcategoría: ${subcategoriaParaDirectorio}`);
+                    
+                    response = await documentApiService.uploadStructuredDocument(
+                        TWIN_ID_STORAGE,
+                        file,
+                        subcategoriaParaDirectorio, // Usar el label en español
+                        estructuraFiltro
                     );
                 }
             } else {
@@ -1457,13 +1545,31 @@ const ArchivosPersonalesPage: React.FC = () => {
             clearInterval(progressInterval);
             setUploadProgress(100);
             
+            console.log('🔍 DEBUG: Respuesta recibida del upload:', response);
+            console.log('🔍 DEBUG: Tipo de respuesta:', typeof response);
+            console.log('🔍 DEBUG: Propiedades disponibles:', Object.keys(response));
+            
             // Verificar si fue exitoso basado en el tipo de respuesta
-            const isSuccessful = response.success || // Para uploads tradicionales
+            const isSuccessful = response.success || // Para uploads tradicionales (camelCase)
                                 response.id ||     // Para orchestrator (tiene ID de instancia)
                                 response.documentId; // Para orchestrator (ID alternativo)
             
+            console.log('🔍 DEBUG: isSuccessful determinado como:', isSuccessful);
+            console.log('🔍 DEBUG: response.success:', response.success);
+            console.log('🔍 DEBUG: response.id:', response.id);
+            console.log('🔍 DEBUG: response.documentId:', response.documentId);
+            
             if (isSuccessful) {
                 console.log('✅ Documento subido exitosamente:', response);
+                console.log('🔍 DEBUG: Propiedades de la respuesta:', Object.keys(response));
+                console.log('🔍 DEBUG: Respuesta completa:', JSON.stringify(response, null, 2));
+                
+                // Cerrar el modal de upload inmediatamente
+                handleCloseUploadModal();
+                
+                // Mostrar estadísticas del archivo procesado
+                setDatosArchivoProcesado(response);
+                setMostrarEstadisticasArchivo(true);
                 
                 // Manejar respuesta del orchestrator vs upload tradicional
                 if (estructuraFiltro === ESTRUCTURA_DOCUMENTOS.SEMI_ESTRUCTURADO) {
@@ -1478,27 +1584,19 @@ const ArchivosPersonalesPage: React.FC = () => {
                             setOrchestratorProgress(100);
                             setIsProcessingOrchestrator(true);
                             
-                            // Cerrar el modal inmediatamente
-                            handleCloseUploadModal();
-                            
-                            // Mostrar mensaje informativo y limpiar después de unos segundos
+                            // Limpiar el estado del orchestrator después de unos segundos
                             setTimeout(() => {
                                 setIsProcessingOrchestrator(false);
                                 setOrchestratorStatus('');
                                 setOrchestratorProgress(0);
                                 
-                                // Mostrar mensaje de información al usuario
                                 console.log('✅ Procesamiento iniciado exitosamente');
-                            }, 5000); // 5 segundos para que el usuario vea el mensaje fuera del modal
-                                
-                                // Mostrar mensaje de información al usuario
-                                console.log('� Procesamiento iniciado exitosamente');
-
+                            }, 3000); // 3 segundos
                         }
                     }
                 } else {
-                    // Upload tradicional
-                    console.log('📂 Detalles de la subida tradicional:', {
+                    // Upload tradicional - solo log, ya se manejan las estadísticas arriba
+                    console.log('📂 Upload tradicional completado:', {
                         success: response.success,
                         message: response.message,
                         fullResponse: response
@@ -1507,23 +1605,12 @@ const ArchivosPersonalesPage: React.FC = () => {
                 
                 setUploadSuccess(true);
                 
-                // Para upload tradicional, recargar inmediatamente
-                if (estructuraFiltro !== ESTRUCTURA_DOCUMENTOS.SEMI_ESTRUCTURADO) {
-                    // Esperar un momento antes de recargar para asegurar consistencia
-                    console.log('⏳ Esperando 2 segundos antes de recargar...');
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    
-                    // Recargar todos los documentos usando el endpoint unificado
-                    console.log('🔄 Recargando documentos después de subida exitosa...');
+                // Recargar documentos después de un momento
+                setTimeout(async () => {
+                    console.log('🔄 Recargando documentos después de upload exitoso...');
                     await loadAllTwinDocuments();
-                    
                     console.log('✅ Recarga de documentos completada');
-                    
-                    // Ocultar modal de upload después de 2 segundos
-                    setTimeout(() => {
-                        handleCloseUploadModal();
-                    }, 2000);
-                }
+                }, 2000);
                 
             } else {
                 throw new Error(response.message || 'Error al subir documento');
@@ -1531,7 +1618,26 @@ const ArchivosPersonalesPage: React.FC = () => {
             
         } catch (error) {
             console.error('❌ Error al subir documento oficial:', error);
-            alert(`Error al subir documento: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+            console.error('❌ Tipo de error:', typeof error);
+            console.error('❌ Error completo:', error);
+            
+            // Determinar el tipo de error y mostrar mensaje apropiado
+            let errorMessage = 'Error desconocido al subir documento';
+            
+            if (error instanceof Error) {
+                if (error.message === 'Failed to fetch') {
+                    errorMessage = 'Error de conexión: No se pudo conectar con el servidor. Verifica tu conexión a internet y que el servidor esté disponible.';
+                } else if (error.message.includes('NetworkError')) {
+                    errorMessage = 'Error de red: Problema de conectividad con el servidor.';
+                } else if (error.message.includes('HTTP')) {
+                    errorMessage = `Error del servidor: ${error.message}`;
+                } else {
+                    errorMessage = `Error: ${error.message}`;
+                }
+            }
+            
+            console.error('❌ Mensaje de error final:', errorMessage);
+            alert(errorMessage);
         } finally {
             setIsUploading(false);
             // Reset file input
@@ -1663,14 +1769,20 @@ const ArchivosPersonalesPage: React.FC = () => {
                             archivo.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             archivo.etiquetas.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
         
-        const matchesEstructura = estructuraFiltro === "todas" || archivo.estructura === estructuraFiltro;
+        // Ser más permisivo con archivos cuando no hay estructura definida
+        const matchesEstructura = estructuraFiltro === "todas" || 
+                                  archivo.estructura === estructuraFiltro ||
+                                  (!archivo.estructura && estructuraFiltro === "todas");
         
-        const matchesSubcategoria = subcategoriaFiltro === "todas" || archivo.subcategoria === subcategoriaFiltro;
+        // Ser más permisivo con archivos cuando no hay subcategoría definida  
+        const matchesSubcategoria = subcategoriaFiltro === "todas" || 
+                                   archivo.subcategoria === subcategoriaFiltro ||
+                                   (!archivo.subcategoria && subcategoriaFiltro === "todas");
         
         const matches = matchesSearch && matchesEstructura && matchesSubcategoria;
         
-        // Debug logging EXPANDIDO para identificar el problema exacto
-        if (archivo.nombre && (estructuraFiltro !== "todas" || subcategoriaFiltro !== "todas")) {
+        // Debug logging EXPANDIDO para identificar el problema exacto - solo cuando hay filtros activos
+        if (archivo.nombre && (estructuraFiltro !== "todas" || subcategoriaFiltro !== "todas" || searchTerm !== "")) {
             console.log(`🔍 FILTRADO DETALLADO del archivo "${archivo.nombre}":`, {
                 archivo: {
                     nombre: archivo.nombre,
@@ -1901,8 +2013,161 @@ const ArchivosPersonalesPage: React.FC = () => {
                                 onClick={async () => {
                                     setIsLoading(true);
                                     try {
-                                        console.log('🔄 Recargando todos los documentos usando endpoint unificado');
-                                        await loadAllTwinDocuments();
+                                        console.log('🔄 Recargando documentos desde Cosmos DB con filtros específicos');
+                                        console.log('📋 Filtros actuales:', {
+                                            estructuraFiltro,
+                                            subcategoriaFiltro
+                                        });
+                                        
+                                        // Determinar el documentType basado en la subcategoría seleccionada
+                                        let documentType = "todas"; // Default
+                                        
+                                        if (subcategoriaFiltro !== "todas") {
+                                            // Mapear subcategoría a document type en español para el backend
+                                            const subcategoriaToDocumentType: { [key: string]: string } = {
+                                                // Documentos estructurados
+                                                "csv": "CSV",
+                                                "json": "JSON", 
+                                                "xml": "XML",
+                                                "database": "Base de datos",
+                                                // Documentos semi-estructurados
+                                                "invoice": "Factura",
+                                                "license": "Licencia",
+                                                "birth_certificate": "Certificado de nacimiento",
+                                                "account_statement": "Estado de cuenta",
+                                                "form": "Formulario",
+                                                // Documentos no estructurados
+                                                "contract": "Contrato",
+                                                "report": "Reporte",
+                                                "email": "Email",
+                                                "letter": "Carta",
+                                                "article": "Artículo"
+                                            };
+                                            
+                                            documentType = subcategoriaToDocumentType[subcategoriaFiltro] || "todas";
+                                        }
+                                        
+                                        console.log(`🎯 Recargando documentos con documentType: "${documentType}"`);
+                                        
+                                        if (documentType !== "todas") {
+                                            // ✅ LIMPIAR ESTADO ANTERIOR ANTES DE CARGAR ESPECÍFICOS
+                                            setArchivos([]);
+                                            setTodosLosArchivos([]);
+                                            
+                                            // Usar el nuevo endpoint de Cosmos DB para tipos específicos
+                                            const documentosCosmosDB = await documentApiService.getAllDocumentsFromCosmosDB(TWIN_ID_STORAGE, documentType);
+                                            console.log(`✅ Documentos obtenidos desde Cosmos DB: ${documentosCosmosDB.length}`);
+                                            
+                                            // Convertir DocumentInfo[] a ArchivoPersonal[] para la UI
+                                            const archivosFromCosmos = documentosCosmosDB.map(doc => {
+                                                // Extraer solo el nombre del archivo de la ruta completa
+                                                const nombreArchivo = doc.filename.split('/').pop() || doc.filename;
+                                                
+                                                // Mapear subcategoría correctamente basado en el documentType
+                                                let subcategoriaCorrecta = doc.metadata?.sub_category || doc.sub_category || "article";
+                                                let detectedTypeCorrecta = "documento"; // Por defecto
+                                                
+                                                if (documentType === "Factura") {
+                                                    subcategoriaCorrecta = "invoice";
+                                                    detectedTypeCorrecta = "factura";
+                                                } else if (documentType === "Certificado") {
+                                                    subcategoriaCorrecta = "certificate";
+                                                    detectedTypeCorrecta = "certificado";
+                                                } else if (documentType === "Contrato") {
+                                                    subcategoriaCorrecta = "contract";
+                                                    detectedTypeCorrecta = "contrato";
+                                                }
+                                                
+                                                console.log(`🔧 Mapeando documento "${doc.filename}" -> "${nombreArchivo}", subcategoría: "${subcategoriaCorrecta}", detectedType: "${detectedTypeCorrecta}"`);
+                                                
+                                                // ✅ DEBUG: Verificar campos de tamaño disponibles (usando acceso dinámico)
+                                                const metadata = doc.metadata as any;
+                                                const tamañoFinal = doc.size_bytes || metadata?.fileSize || metadata?.contentLength || metadata?.size || 0;
+                                                console.log(`📏 Tamaño para "${nombreArchivo}":`, {
+                                                    size_bytes: doc.size_bytes,
+                                                    'metadata.fileSize': metadata?.fileSize,
+                                                    'metadata.contentLength': metadata?.contentLength,
+                                                    'metadata.size': metadata?.size,
+                                                    tamañoFinal: tamañoFinal,
+                                                    tamañoFormateado: tamañoFinal > 0 ? `${(tamañoFinal / 1024).toFixed(1)} KB` : '0 Bytes'
+                                                });
+                                                
+                                                return {
+                                                    id: doc.id || doc.filename,
+                                                    nombre: nombreArchivo, // Solo el nombre del archivo, no la ruta completa
+                                                    tipo: doc.filename.split('.').pop()?.toLowerCase() || 'unknown',
+                                                    tamaño: tamañoFinal, // ✅ USAR EL TAMAÑO CALCULADO
+                                                    fechaSubida: doc.last_modified || new Date().toISOString().split('T')[0],
+                                                    url: doc.metadata?.documentUrl || doc.public_url,
+                                                    categoria: doc.metadata?.sub_category || doc.sub_category || "Documento",
+                                                    descripcion: doc.content_summary || `Documento de tipo ${doc.document_type || 'desconocido'}`,
+                                                    etiquetas: doc.metadata?.tags || [],
+                                                    estructura: (() => {
+                                                        const structureType = doc.structure_type || doc.metadata?.structure_type || '';
+                                                        if (structureType.toLowerCase().includes('semi')) {
+                                                            return ESTRUCTURA_DOCUMENTOS.SEMI_ESTRUCTURADO;
+                                                        } else if (structureType.toLowerCase().includes('structured')) {
+                                                            return ESTRUCTURA_DOCUMENTOS.ESTRUCTURADO;
+                                                        } else {
+                                                            return ESTRUCTURA_DOCUMENTOS.NO_ESTRUCTURADO;
+                                                        }
+                                                    })(),
+                                                    subcategoria: subcategoriaCorrecta, // Usar la subcategoría mapeada correctamente
+                                                    detectedType: detectedTypeCorrecta, // ✅ AGREGAR DETECTED TYPE PARA LOS CONTADORES
+                                                    documentMetadata: doc.metadata,
+                                                    
+                                                    // Agregar campos adicionales para navegación desde metadatos
+                                                    sasUrl: doc.metadata?.sasUrl || doc.public_url,
+                                                    AiExecutiveSummaryHtml: doc.metadata?.AiExecutiveSummaryHtml,
+                                                    vendorName: doc.metadata?.vendorName,
+                                                    invoiceTotal: doc.metadata?.invoiceTotal,
+                                                    metadata: doc.metadata // Preservar todos los metadatos
+                                                };
+                                            });
+                                            
+                                            setArchivos(archivosFromCosmos);
+                                            setTodosLosArchivos(archivosFromCosmos); // ✅ ACTUALIZAR TAMBIÉN LOS CONTADORES
+                                            console.log(`📊 Total archivos cargados desde Cosmos DB: ${archivosFromCosmos.length}`);
+                                            
+                                            // ✅ Debug: Verificar contadores después de la actualización
+                                            console.log(`🔢 Contadores actualizados:`, {
+                                                todos: archivosFromCosmos.length,
+                                                facturas: archivosFromCosmos.filter(a => 
+                                                    a.detectedType === 'factura' || 
+                                                    a.categoria?.includes('Factura') ||
+                                                    a.subcategoria === 'invoice' ||
+                                                    a.etiquetas?.some(e => e.includes('factura') || e.includes('invoice')) ||
+                                                    a.nombre?.toLowerCase().includes('factura') ||
+                                                    a.nombre?.toLowerCase().includes('invoice')
+                                                ).length,
+                                                contratos: archivosFromCosmos.filter(a => 
+                                                    a.detectedType === 'contrato' ||
+                                                    a.categoria?.includes('Contrato') ||
+                                                    a.subcategoria === 'contract'
+                                                ).length
+                                            });
+                                            
+                                            // ✅ Debug específico: Verificar metadatos de facturas
+                                            archivosFromCosmos.forEach(archivo => {
+                                                if (archivo.detectedType === 'factura') {
+                                                    console.log(`💰 FACTURA "${archivo.nombre}" - Metadata:`, {
+                                                        vendorName: archivo.documentMetadata?.vendorName,
+                                                        invoiceTotal: archivo.documentMetadata?.invoiceTotal,
+                                                        invoiceNumber: archivo.documentMetadata?.invoiceNumber,
+                                                        tieneMetadata: !!archivo.documentMetadata,
+                                                        metadataKeys: archivo.documentMetadata ? Object.keys(archivo.documentMetadata) : []
+                                                    });
+                                                }
+                                            });
+                                        } else {
+                                            // ✅ LIMPIAR ESTADO ANTERIOR ANTES DE CARGAR GENERALES
+                                            setArchivos([]);
+                                            setTodosLosArchivos([]);
+                                            
+                                            // Para "todas", usar el endpoint general
+                                            await loadAllTwinDocuments();
+                                        }
+                                        
                                         console.log('✅ Recarga completada');
                                     } catch (error) {
                                         console.error('❌ Error al recargar documentos:', error);
@@ -2690,7 +2955,14 @@ const ArchivosPersonalesPage: React.FC = () => {
                         )}
                     </div>
                 ) : (
-                    <div className={`grid gap-6 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"}`}>
+                    <>
+                        {/* DEBUG: Log para ver archivos disponibles */}
+                        {console.log(`🎯 RENDERIZANDO CARDS: ${archivosFiltrados.length} archivos filtrados de ${archivos.length} archivos totales`, {
+                            filtros: { estructuraFiltro, subcategoriaFiltro, searchTerm },
+                            archivos: archivos.slice(0, 3).map(a => ({ nombre: a.nombre, estructura: a.estructura, subcategoria: a.subcategoria })),
+                            archivosFiltrados: archivosFiltrados.slice(0, 3).map(a => ({ nombre: a.nombre, estructura: a.estructura, subcategoria: a.subcategoria }))
+                        })}
+                        <div className={`grid gap-6 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"}`}>
                         {archivosFiltrados.map((archivo) => (
                             <div key={archivo.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                                 <div className="flex items-start justify-between mb-4">
@@ -2713,41 +2985,179 @@ const ArchivosPersonalesPage: React.FC = () => {
                                         </div>
                                     </div>
                                     
-                                    <div className="flex items-center space-x-2">
+                                    <div className="flex items-center space-x-1">
                                         <button 
                                             onClick={() => handleViewFile(archivo)}
                                             className="text-gray-400 hover:text-blue-600"
                                             title="Ver archivo"
                                         >
-                                            <Eye size={16} />
+                                            <Eye size={14} />
                                         </button>
-                                        <button className="text-gray-400 hover:text-green-600">
-                                            <Download size={16} />
+                                        <button 
+                                            onClick={() => {
+                                                // Descargar archivo usando SAS URL - FORZAR DESCARGA
+                                                const downloadUrl = archivo.documentMetadata?.sasUrl || archivo.url;
+                                                if (downloadUrl) {
+                                                    console.log(`📥 Descargando archivo: ${archivo.nombre} desde ${downloadUrl}`);
+                                                    
+                                                    // Método 1: Fetch + Blob para forzar descarga
+                                                    fetch(downloadUrl)
+                                                        .then(response => {
+                                                            if (!response.ok) {
+                                                                throw new Error('Error en la descarga');
+                                                            }
+                                                            return response.blob();
+                                                        })
+                                                        .then(blob => {
+                                                            // Crear URL temporal del blob
+                                                            const blobUrl = window.URL.createObjectURL(blob);
+                                                            const link = document.createElement('a');
+                                                            link.href = blobUrl;
+                                                            link.download = archivo.nombre; // Fuerza el nombre del archivo
+                                                            link.style.display = 'none';
+                                                            
+                                                            // Agregar al DOM, hacer clic, y limpiar
+                                                            document.body.appendChild(link);
+                                                            link.click();
+                                                            document.body.removeChild(link);
+                                                            
+                                                            // Limpiar URL temporal después de un momento
+                                                            setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+                                                        })
+                                                        .catch(error => {
+                                                            console.error('❌ Error al descargar:', error);
+                                                            // Fallback: método tradicional si fetch falla
+                                                            const link = document.createElement('a');
+                                                            link.href = downloadUrl;
+                                                            link.download = archivo.nombre;
+                                                            link.target = '_blank';
+                                                            link.rel = 'noopener noreferrer';
+                                                            document.body.appendChild(link);
+                                                            link.click();
+                                                            document.body.removeChild(link);
+                                                        });
+                                                } else {
+                                                    console.error('❌ No hay URL de descarga disponible para:', archivo.nombre);
+                                                    alert('No hay URL de descarga disponible para este archivo');
+                                                }
+                                            }}
+                                            className="text-gray-400 hover:text-green-600"
+                                            title="Descargar archivo"
+                                        >
+                                            <Download size={14} />
                                         </button>
                                         <button 
                                             onClick={() => handleDeleteFile(archivo.id, archivo.nombre)}
                                             className="text-gray-400 hover:text-red-600"
                                         >
-                                            <Trash2 size={16} />
+                                            <Trash2 size={14} />
                                         </button>
                                     </div>
                                 </div>
                                 
                                 {(() => {
-                                    // Show vendor name for any document that has vendor information in structured data
-                                    const structuredData = archivo.documentMetadata?.structuredData;
-                                    const vendorName = structuredData?.vendor?.name;
+                                    // Mostrar información relevante basada en los datos de CosmosDocumentSummary
+                                    const metadata = archivo.documentMetadata;
                                     
-                                    // If there's a vendor name, show it regardless of document type
-                                    if (vendorName) {
+                                    // ✅ DEBUG: Log de metadata para cada archivo
+                                    console.log(`🔍 Metadata para "${archivo.nombre}":`, {
+                                        tieneMetadata: !!metadata,
+                                        vendorName: metadata?.vendorName,
+                                        invoiceTotal: metadata?.invoiceTotal,
+                                        invoiceNumber: metadata?.invoiceNumber,
+                                        metadataCompleto: metadata
+                                    });
+                                    
+                                    // Si es una factura con datos de Document Intelligence
+                                    if (metadata?.vendorName || metadata?.invoiceTotal || metadata?.invoiceNumber) {
                                         return (
-                                            <p className="text-sm text-gray-600 mb-3">
-                                                <strong>Vendor:</strong> {vendorName}
-                                            </p>
+                                            <div className="space-y-2 mb-3">
+                                                {/* Información del proveedor - MÁS PROMINENTE */}
+                                                {metadata.vendorName && (
+                                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center">
+                                                                <span className="text-blue-600 mr-2">🏢</span>
+                                                                <span className="font-semibold text-blue-800 text-sm">{metadata.vendorName}</span>
+                                                            </div>
+                                                            {metadata.vendorNameConfidence && metadata.vendorNameConfidence > 0.8 && (
+                                                                <div className="flex items-center">
+                                                                    <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
+                                                                        ✓ {Math.round(metadata.vendorNameConfidence * 100)}%
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
+                                                {/* Total de la factura */}
+                                                {metadata.invoiceTotal && metadata.invoiceTotal > 0 && (
+                                                    <div className="flex items-center text-sm">
+                                                        <span className="text-gray-500 mr-2">💰</span>
+                                                        <span className="font-semibold text-green-700">
+                                                            {new Intl.NumberFormat('en-US', { 
+                                                                style: 'currency', 
+                                                                currency: 'USD' 
+                                                            }).format(metadata.invoiceTotal)}
+                                                        </span>
+                                                        {metadata.invoiceTotalConfidence && metadata.invoiceTotalConfidence > 0.8 && (
+                                                            <span className="ml-2 text-xs text-green-600">✓</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                
+                                                {/* Número de factura */}
+                                                {metadata.invoiceNumber && (
+                                                    <div className="flex items-center text-sm">
+                                                        <span className="text-gray-500 mr-2">📄</span>
+                                                        <span className="text-gray-600 text-xs">#{metadata.invoiceNumber}</span>
+                                                    </div>
+                                                )}
+                                                
+                                                {/* Fecha de la factura */}
+                                                {metadata.invoiceDate && (
+                                                    <div className="flex items-center text-sm">
+                                                        <span className="text-gray-500 mr-2">📅</span>
+                                                        <span className="text-gray-600 text-xs">
+                                                            {new Date(metadata.invoiceDate).toLocaleDateString('es-ES')}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         );
                                     }
                                     
-                                    // For other documents, show description if it exists and is not too long
+                                    // Si tiene análisis de AI disponible
+                                    if (metadata?.hasAiCompleteAnalysis || metadata?.htmlReport) {
+                                        return (
+                                            <div className="mb-3">
+                                                <div className="flex items-center text-sm text-blue-600">
+                                                    <span className="mr-2">🧠</span>
+                                                    <span className="text-xs">Análisis de IA disponible</span>
+                                                    {metadata.aiDataFieldsCount && metadata.aiDataFieldsCount > 0 && (
+                                                        <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                                            {metadata.aiDataFieldsCount} campos
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    
+                                    // Si tiene información de páginas
+                                    if (archivo.pages && archivo.pages > 1) {
+                                        return (
+                                            <div className="mb-3">
+                                                <div className="flex items-center text-sm text-gray-600">
+                                                    <span className="mr-2">📖</span>
+                                                    <span className="text-xs">{archivo.pages} páginas</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    
+                                    // Fallback: mostrar descripción si existe
                                     if (archivo.descripcion && archivo.descripcion.length < 200) {
                                         return <p className="text-sm text-gray-600 mb-3">{archivo.descripcion}</p>;
                                     }
@@ -2785,7 +3195,8 @@ const ArchivosPersonalesPage: React.FC = () => {
                                 )}
                             </div>
                         ))}
-                    </div>
+                        </div>
+                    </>
                 )}
                 
                 {/* Resumen y estadísticas */}
@@ -2908,6 +3319,130 @@ const ArchivosPersonalesPage: React.FC = () => {
                             </>
                         );
                         })()}
+                    </div>
+                )}
+
+                {/* Modal de Estadísticas del Archivo Procesado */}
+                {mostrarEstadisticasArchivo && datosArchivoProcesado && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-xl font-semibold flex items-center">
+                                    📊 Estadísticas del Archivo Procesado
+                                </h3>
+                                <button
+                                    onClick={handleCloseEstadisticasModal}
+                                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div className="space-y-6">
+                                {/* Información básica del archivo */}
+                                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                    <div className="flex items-center mb-3">
+                                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                                            <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-lg font-semibold text-green-800">¡Upload Exitoso!</h4>
+                                            <p className="text-green-600">El archivo ha sido procesado correctamente</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Detalles del archivo */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="bg-blue-50 rounded-lg p-4">
+                                        <h5 className="font-semibold text-blue-800 mb-2">📄 Información del Archivo</h5>
+                                        <div className="space-y-2 text-sm">
+                                            <div><span className="font-medium">Nombre:</span> {datosArchivoProcesado.fileName || 'N/A'}</div>
+                                            <div><span className="font-medium">Tamaño:</span> {datosArchivoProcesado.fileSize ? `${(datosArchivoProcesado.fileSize / 1024).toFixed(2)} KB` : 'N/A'}</div>
+                                            <div><span className="font-medium">Tipo MIME:</span> {datosArchivoProcesado.mimeType || 'N/A'}</div>
+                                            <div><span className="font-medium">Tipo de documento:</span> {datosArchivoProcesado.documentType || 'N/A'}</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-purple-50 rounded-lg p-4">
+                                        <h5 className="font-semibold text-purple-800 mb-2">🚀 Información de Procesamiento</h5>
+                                        <div className="space-y-2 text-sm">
+                                            <div><span className="font-medium">Estado:</span> {datosArchivoProcesado.success ? '✅ Exitoso' : '❌ Error'}</div>
+                                            <div><span className="font-medium">Ubicación:</span> {datosArchivoProcesado.filePath || 'N/A'}</div>
+                                            <div><span className="font-medium">Container:</span> {datosArchivoProcesado.containerName || 'N/A'}</div>
+                                            <div><span className="font-medium">Tiempo de procesamiento:</span> {datosArchivoProcesado.processingTimeSeconds ? `${datosArchivoProcesado.processingTimeSeconds}s` : 'N/A'}</div>
+                                            <div><span className="font-medium">Subido el:</span> {datosArchivoProcesado.uploadedAt ? new Date(datosArchivoProcesado.uploadedAt).toLocaleString() : 'N/A'}</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Metadatos si existen */}
+                                {datosArchivoProcesado.metadata && (
+                                    <div className="bg-gray-50 rounded-lg p-4">
+                                        <h5 className="font-semibold text-gray-800 mb-2">🔍 Metadatos</h5>
+                                        <pre className="text-sm bg-white p-3 rounded border overflow-x-auto">
+                                            {JSON.stringify(datosArchivoProcesado.metadata, null, 2)}
+                                        </pre>
+                                    </div>
+                                )}
+
+                                {/* DEBUG: Mostrar toda la respuesta */}
+                                <div className="bg-gray-100 rounded-lg p-4 border-2 border-dashed border-gray-300">
+                                    <h5 className="font-semibold text-gray-800 mb-2">🔧 DEBUG: Respuesta Completa del Backend</h5>
+                                    <pre className="text-xs bg-white p-3 rounded border overflow-x-auto max-h-60">
+                                        {JSON.stringify(datosArchivoProcesado, null, 2)}
+                                    </pre>
+                                    <p className="text-xs text-gray-600 mt-2">
+                                        Esta sección muestra todos los datos recibidos del backend para depuración
+                                    </p>
+                                </div>
+
+                                {/* Mensaje del procesamiento */}
+                                {datosArchivoProcesado.message && (
+                                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                        <h5 className="font-semibold text-yellow-800 mb-2">💬 Mensaje del Sistema</h5>
+                                        <p className="text-yellow-700">{datosArchivoProcesado.message}</p>
+                                    </div>
+                                )}
+
+                                {/* Mensaje de error si existe */}
+                                {datosArchivoProcesado.errorMessage && (
+                                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                        <h5 className="font-semibold text-red-800 mb-2">❌ Error</h5>
+                                        <p className="text-red-700">{datosArchivoProcesado.errorMessage}</p>
+                                    </div>
+                                )}
+
+                                {/* URL del archivo si está disponible */}
+                                {datosArchivoProcesado.url && (
+                                    <div className="bg-indigo-50 rounded-lg p-4">
+                                        <h5 className="font-semibold text-indigo-800 mb-2">🔗 Acceso al Archivo</h5>
+                                        <a 
+                                            href={datosArchivoProcesado.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-indigo-600 hover:text-indigo-800 underline text-sm break-all"
+                                        >
+                                            Ver archivo procesado
+                                        </a>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Botón de cerrar */}
+                            <div className="mt-6 flex justify-end">
+                                <button
+                                    onClick={handleCloseEstadisticasModal}
+                                    className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                                >
+                                    Cerrar
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Download, FileText, AlertTriangle, Loader2 } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { documentApiService } from '@/services/documentApiService';
 import { useMsal } from '@azure/msal-react';
 
@@ -12,8 +12,11 @@ interface DocumentFile {
     categoria: string;
     fechaSubida: string;
     path?: string;
+    sasUrl?: string;
+    AiExecutiveSummaryHtml?: string;
     metadata?: {
         vendor?: string;
+        sasUrl?: string;
         [key: string]: any;
     };
 }
@@ -51,6 +54,7 @@ const getDocumentType = (categoria: string): string => {
 const TwinAgentArchivoDetalles: React.FC = () => {
     const navigate = useNavigate();
     const { filename } = useParams<{ filename: string }>();
+    const location = useLocation();
     const { accounts } = useMsal();
     const msalUser = accounts && accounts.length > 0 ? accounts[0] : null;
     
@@ -59,6 +63,7 @@ const TwinAgentArchivoDetalles: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [pdfLoading, setPdfLoading] = useState(true);
+    const [pdfError, setPdfError] = useState<string | null>(null);
 
     const twinId = msalUser?.localAccountId;
     const decodedFilename = filename ? decodeURIComponent(filename) : '';
@@ -75,11 +80,39 @@ const TwinAgentArchivoDetalles: React.FC = () => {
                 console.log('🔍 TwinAgent - Cargando datos del documento:', decodedFilename);
                 console.log('🆔 TwinAgent - Twin ID:', twinId);
                 
+                // Verificar si tenemos datos del estado de navegación
+                if (location.state?.archivo) {
+                    console.log('📄 TwinAgent - Usando datos del archivo desde navegación:', location.state.archivo);
+                    console.log('🔗 TwinAgent - SAS URL desde navegación:', location.state.archivo.sasUrl);
+                    console.log('🔗 TwinAgent - Metadata SAS URL desde navegación:', location.state.archivo.metadata?.sasUrl);
+                    console.log('🔗 TwinAgent - Path desde navegación:', location.state.archivo.path);
+                    console.log('🧠 TwinAgent - AiExecutiveSummaryHtml desde navegación:', location.state.archivo.AiExecutiveSummaryHtml ? 'Disponible' : 'No disponible');
+                    
+                    // Usar datos del estado de navegación (más confiables)
+                    setArchivo(location.state.archivo);
+                    
+                    if (location.state?.richDocumentData) {
+                        setRichDocumentData(location.state.richDocumentData);
+                    }
+                    
+                    setLoading(false);
+                    return;
+                }
+                
+                console.log('⚠️ TwinAgent - No hay datos desde navegación, consultando backend...');
+                
                 // Llamar al endpoint para obtener los metadatos ricos del documento desde Cosmos DB
                 const response = await documentApiService.getDocumentMetadata(twinId, decodedFilename);
                 
                 if (response.success && response.data) {
                     console.log('✅ TwinAgent - Metadatos del documento cargados:', response.data);
+                    
+                    // DEBUG: Revisar todas las URLs disponibles
+                    console.log('🔍 DEBUG - URLs disponibles en response.data:');
+                    console.log('  - response.data.public_url:', response.data.public_url);
+                    console.log('  - response.data.metadata?.documentUrl:', response.data.metadata?.documentUrl);
+                    console.log('  - response.data.metadata?.sasUrl:', response.data.metadata?.sasUrl);
+                    console.log('  - response.data.metadata?.AiExecutiveSummaryHtml:', response.data.metadata?.AiExecutiveSummaryHtml ? 'Disponible' : 'No disponible');
                     
                     // Mapear los datos al formato esperado
                     const documentData: DocumentFile = {
@@ -90,6 +123,8 @@ const TwinAgentArchivoDetalles: React.FC = () => {
                         categoria: response.data.metadata?.sub_category || 'documento',
                         fechaSubida: response.data.last_modified || new Date().toISOString(),
                         path: response.data.metadata?.documentUrl || response.data.public_url,
+                        sasUrl: response.data.metadata?.sasUrl || response.data.metadata?.documentUrl || response.data.public_url, // AGREGAR SASURL ESPECÍFICO
+                        AiExecutiveSummaryHtml: response.data.metadata?.AiExecutiveSummaryHtml, // AGREGAR HTML SUMMARY
                         metadata: response.data.metadata
                     };
 
@@ -102,6 +137,13 @@ const TwinAgentArchivoDetalles: React.FC = () => {
 
                     setArchivo(documentData);
                     setRichDocumentData(richData);
+                    
+                    // DEBUG: Verificar el objeto final que se usará
+                    console.log('✅ TwinAgent - Documento mapeado correctamente:');
+                    console.log('  - documentData.sasUrl:', documentData.sasUrl);
+                    console.log('  - documentData.path:', documentData.path);
+                    console.log('  - documentData.metadata?.sasUrl:', documentData.metadata?.sasUrl);
+                    console.log('  - URL final para iframe:', documentData.sasUrl || documentData.metadata?.sasUrl || documentData.path || `/uploads/${documentData.filename}`);
                     
                     console.log('📊 TwinAgent - HTML Report disponible:', !!richData.htmlReport);
                     console.log('📊 TwinAgent - Datos estructurados disponibles:', !!richData.structuredData);
@@ -126,9 +168,10 @@ const TwinAgentArchivoDetalles: React.FC = () => {
     const documentType = archivo ? getDocumentType(archivo.categoria) : 'Desconocido';
 
     const downloadHtml = () => {
-        if (!richDocumentData?.htmlReport || !archivo) return;
+        if ((!richDocumentData?.htmlReport && !archivo?.AiExecutiveSummaryHtml) || !archivo) return;
         
-        const blob = new Blob([richDocumentData.htmlReport], { type: 'text/html' });
+        const htmlContent = archivo.AiExecutiveSummaryHtml || richDocumentData?.htmlReport || '';
+        const blob = new Blob([htmlContent], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -189,7 +232,7 @@ const TwinAgentArchivoDetalles: React.FC = () => {
                     </div>
                     
                     <div className="flex items-center space-x-3">
-                        {richDocumentData?.htmlReport && (
+                        {(richDocumentData?.htmlReport || archivo.AiExecutiveSummaryHtml) && (
                             <button
                                 onClick={downloadHtml}
                                 className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
@@ -205,10 +248,32 @@ const TwinAgentArchivoDetalles: React.FC = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     {/* LEFT COLUMN - PDF Viewer */}
                     <div className="bg-white rounded-lg shadow-md p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                            <FileText className="mr-2" size={20} />
-                            Vista Previa del Documento
-                        </h2>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                                <FileText className="mr-2" size={20} />
+                                Vista Previa del Documento
+                            </h2>
+                            
+                            {archivo.filename.toLowerCase().endsWith('.pdf') && (archivo.sasUrl || archivo.metadata?.sasUrl) && (
+                                <button
+                                    onClick={() => {
+                                        const url = archivo.sasUrl || archivo.metadata?.sasUrl;
+                                        if (url) {
+                                            console.log('🔗 Abriendo PDF en nueva ventana desde header:', url);
+                                            window.open(url, '_blank');
+                                        }
+                                    }}
+                                    className="flex items-center space-x-2 px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors"
+                                    title="Abrir PDF en nueva ventana"
+                                >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M14 3V5H17.59L7.76 14.83L9.17 16.24L19 6.41V10H21V3H14Z" fill="currentColor"/>
+                                        <path d="M19 19H5V5H12V3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V12H19V19Z" fill="currentColor"/>
+                                    </svg>
+                                    <span>Nueva ventana</span>
+                                </button>
+                            )}
+                        </div>
                         
                         <div className="border rounded-lg overflow-hidden bg-white" style={{ height: '800px' }}>
                             {archivo.filename.toLowerCase().endsWith('.pdf') ? (
@@ -220,13 +285,22 @@ const TwinAgentArchivoDetalles: React.FC = () => {
                                                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
                                                 <p className="text-gray-600">Cargando PDF...</p>
                                                 <p className="text-xs text-gray-400 mt-2 break-all px-4">
-                                                    URL: {archivo.path || 'Default path'}
+                                                    SAS URL: {archivo.sasUrl || 'No disponible'}
+                                                </p>
+                                                <p className="text-xs text-gray-400 mt-1 break-all px-4">
+                                                    Metadata SAS: {archivo.metadata?.sasUrl || 'No disponible'}
+                                                </p>
+                                                <p className="text-xs text-gray-400 mt-1 break-all px-4">
+                                                    Path: {archivo.path || 'No disponible'}
+                                                </p>
+                                                <p className="text-xs text-blue-600 mt-2 break-all px-4 font-medium">
+                                                    URL Final: {archivo.sasUrl || archivo.metadata?.sasUrl || archivo.path || `/uploads/${archivo.filename}`}
                                                 </p>
                                             </div>
                                         </div>
                                     )}
                                     <iframe
-                                        src={archivo.path || `/uploads/${archivo.filename}`}
+                                        src={archivo.sasUrl || archivo.metadata?.sasUrl || archivo.path || `/uploads/${archivo.filename}`}
                                         className="w-full h-full border-0"
                                         title={`Vista previa de ${archivo.filename}`}
                                         allow="fullscreen"
@@ -235,14 +309,71 @@ const TwinAgentArchivoDetalles: React.FC = () => {
                                             border: 'none',
                                             outline: 'none'
                                         }}
-                                        onLoad={() => setPdfLoading(false)}
-                                        onError={() => setPdfLoading(false)}
+                                        onLoad={() => {
+                                            console.log('✅ PDF Iframe cargado exitosamente');
+                                            console.log('🔗 URL del iframe:', archivo.sasUrl || archivo.metadata?.sasUrl || archivo.path);
+                                            setPdfLoading(false);
+                                            setPdfError(null);
+                                        }}
+                                        onError={(e) => {
+                                            console.error('❌ Error al cargar PDF en iframe:', e);
+                                            console.error('🔗 URL que falló:', archivo.sasUrl || archivo.metadata?.sasUrl || archivo.path);
+                                            setPdfLoading(false);
+                                            setPdfError('Error al cargar el PDF. La URL puede haber expirado o ser inválida.');
+                                        }}
                                     />
+                                    
+                                    {/* Mostrar error específico del PDF */}
+                                    {pdfError && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-20">
+                                            <div className="text-center p-8 max-w-md">
+                                                <AlertTriangle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+                                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Error al cargar el PDF</h3>
+                                                <p className="text-gray-600 mb-4">{pdfError}</p>
+                                                <div className="flex space-x-3">
+                                                    <button
+                                                        onClick={() => {
+                                                            setPdfError(null);
+                                                            setPdfLoading(true);
+                                                            // Recargar el iframe forzando un refresh
+                                                            const iframe = document.querySelector('iframe');
+                                                            if (iframe) {
+                                                                iframe.src = iframe.src;
+                                                            }
+                                                        }}
+                                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                                    >
+                                                        Intentar de nuevo
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            const url = archivo.sasUrl || archivo.metadata?.sasUrl;
+                                                            if (url) {
+                                                                console.log('🔗 Abriendo PDF en nueva ventana:', url);
+                                                                window.open(url, '_blank');
+                                                            } else {
+                                                                console.error('❌ No hay URL disponible para abrir en nueva ventana');
+                                                            }
+                                                        }}
+                                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                                                    >
+                                                        Abrir en nueva ventana
+                                                    </button>
+                                                </div>
+                                                <div className="mt-4 p-3 bg-gray-100 rounded text-xs text-left">
+                                                    <p className="font-semibold mb-2">URLs disponibles:</p>
+                                                    <p><strong>SAS URL:</strong> {archivo.sasUrl || 'No disponible'}</p>
+                                                    <p><strong>Metadata SAS:</strong> {archivo.metadata?.sasUrl || 'No disponible'}</p>
+                                                    <p><strong>Path:</strong> {archivo.path || 'No disponible'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (archivo.filename.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/)) ? (
                                 <div className="w-full h-full flex items-center justify-center">
                                     <img
-                                        src={archivo.path || `/uploads/${archivo.filename}`}
+                                        src={archivo.sasUrl || archivo.metadata?.sasUrl || archivo.path || `/uploads/${archivo.filename}`}
                                         alt={archivo.filename}
                                         className="max-w-full max-h-full object-contain"
                                     />
@@ -253,10 +384,10 @@ const TwinAgentArchivoDetalles: React.FC = () => {
                                         <FileText className="mx-auto mb-4 text-gray-400" size={64} />
                                         <p className="text-lg font-medium text-gray-700">{archivo.filename}</p>
                                         <p className="text-sm text-gray-500">Tipo: {archivo.tipo}</p>
-                                        <p className="text-xs text-gray-400 mt-2">URL: {archivo.path || 'No disponible'}</p>
+                                        <p className="text-xs text-gray-400 mt-2">URL: {archivo.sasUrl || archivo.metadata?.sasUrl || archivo.path || 'No disponible'}</p>
                                         <button
                                             onClick={() => {
-                                                const url = archivo.path || `/uploads/${archivo.filename}`;
+                                                const url = archivo.sasUrl || archivo.metadata?.sasUrl || archivo.path || `/uploads/${archivo.filename}`;
                                                 const link = document.createElement('a');
                                                 link.href = url;
                                                 link.download = archivo.filename;
@@ -278,11 +409,14 @@ const TwinAgentArchivoDetalles: React.FC = () => {
                             🧠 Contenido Procesado por IA (TwinAgent)
                         </h2>
                         
-                        {richDocumentData?.htmlReport ? (
+                        {richDocumentData?.htmlReport || archivo.AiExecutiveSummaryHtml ? (
                             <div className="w-full">
                                 <div className="bg-green-50 px-4 py-2 border border-green-200 rounded-t-lg mb-0">
                                     <span className="text-sm text-green-700 font-medium">
-                                        📄 HTML Renderizado ({richDocumentData.htmlReport.length.toLocaleString()} caracteres)
+                                        📄 {archivo.AiExecutiveSummaryHtml ? 
+                                            `AI Executive Summary (${archivo.AiExecutiveSummaryHtml.length.toLocaleString()} caracteres)` :
+                                            `HTML Renderizado (${richDocumentData?.htmlReport?.length.toLocaleString() || 0} caracteres)`
+                                        }
                                     </span>
                                 </div>
                                 <div 
@@ -295,7 +429,7 @@ const TwinAgentArchivoDetalles: React.FC = () => {
                                         fontFamily: 'system-ui, -apple-system, sans-serif'
                                     }}
                                     dangerouslySetInnerHTML={{ 
-                                        __html: richDocumentData.htmlReport 
+                                        __html: archivo.AiExecutiveSummaryHtml || richDocumentData?.htmlReport || ''
                                     }}
                                 />
                             </div>
@@ -310,6 +444,7 @@ const TwinAgentArchivoDetalles: React.FC = () => {
                                         <ul className="list-disc list-inside ml-2 mt-2">
                                             <li>Datos ricos disponibles: {richDocumentData ? '✅ Sí' : '❌ No'}</li>
                                             <li>HTML Report disponible: {richDocumentData?.htmlReport ? '✅ Sí' : '❌ No'}</li>
+                                            <li>AI Executive Summary HTML disponible: {archivo.AiExecutiveSummaryHtml ? '✅ Sí' : '❌ No'}</li>
                                             <li>Datos estructurados disponibles: {richDocumentData?.structuredData ? '✅ Sí' : '❌ No'}</li>
                                         </ul>
                                     </div>
@@ -472,7 +607,7 @@ const TwinAgentArchivoDetalles: React.FC = () => {
                                 </span>
                             </p>
                             <p className="text-sm text-green-700">
-                                <strong>Estado de Procesamiento:</strong> {richDocumentData?.htmlReport ? 
+                                <strong>Estado de Procesamiento:</strong> {archivo.AiExecutiveSummaryHtml || richDocumentData?.htmlReport ? 
                                     "✅ Este documento ha sido procesado por IA en TwinAgent y contiene información extraída." :
                                     "ℹ️ Este documento no ha sido procesado por IA en TwinAgent o el procesamiento no está disponible."
                                 }

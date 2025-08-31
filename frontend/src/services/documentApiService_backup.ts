@@ -78,7 +78,7 @@ class DocumentApiService {
     private baseUrl: string;
 
     constructor() {
-        this.baseUrl = 'http://localhost:7072';
+        this.baseUrl = 'http://localhost:7011';
     }
 
     /**

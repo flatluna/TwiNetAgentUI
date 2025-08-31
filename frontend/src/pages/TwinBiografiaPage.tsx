@@ -85,9 +85,9 @@ const TwinBiografiaPage: React.FC = () => {
                 {
                     id: "carrera",
                     title: "Carrera Profesional",
-                    description: "Trabajos, empresas, proyectos, logros",
+                    description: "CV, historial laboral, empresas, sueldos, crecimiento",
                     icon: Briefcase,
-                    path: "/twin-biografia/carrera",
+                    path: "/twin-biografia/carrera-profesional",
                     progress: 0
                 }
             ]

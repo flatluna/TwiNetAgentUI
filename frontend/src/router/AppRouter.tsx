@@ -10,6 +10,9 @@ import FotosFamiliaresPage from "@/pages/biografia/FotosFamiliaresPage";
 import DatosPersonalesPage from "@/pages/biografia/DatosPersonalesPage";
 import ArchivosPersonalesPage from "@/pages/biografia/ArchivosPersonalesPage";
 import ContactosPage from "@/pages/biografia/ContactosPage";
+import EducacionPage from "@/pages/biografia/EducacionPage";
+import FamiliaPage from "@/pages/biografia/FamiliaPage";
+import CarreraProfesionalPage from "@/pages/biografia/CarreraProfesionalPage";
 import ArchivoDetalles from "@/pages/biografia/ArchivoDetalles";
 import TwinAgentArchivoDetalles from "@/pages/TwinAgentArchivoDetalles";
 import AdvancedCSVViewer from "@/pages/biografia/AdvancedCSVViewer";
@@ -63,6 +66,18 @@ const router = createBrowserRouter([
             {
                 path: "twin-biografia/contactos",
                 element: <ProtectedRoute><ContactosPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/educacion",
+                element: <ProtectedRoute><EducacionPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/familia",
+                element: <ProtectedRoute><FamiliaPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/carrera-profesional",
+                element: <ProtectedRoute><CarreraProfesionalPage /></ProtectedRoute>,
             },
             {
                 path: "twin-biografia/archivos-personales/:filename",

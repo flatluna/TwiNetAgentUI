@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useMsal } from "@azure/msal-react";
 import { Button } from "@/components/ui/button";
 import { twinApiService } from "@/services/twinApiService";
+import usePhotoMetadata, { PhotoMetadata } from "@/hooks/usePhotoMetadata";
 import { 
     Upload, 
     Camera, 
@@ -18,7 +19,9 @@ import {
     Loader2,
     ChevronLeft,
     ChevronRight,
-    Maximize2
+    Maximize2,
+    Wand2,
+    Info
 } from "lucide-react";
 
 interface FamilyPhoto {
@@ -70,6 +73,27 @@ const FotosFamiliaresPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
     const [formData, setFormData] = useState<PhotoFormData>({
+        description: '',
+        date_taken: new Date().toISOString().split('T')[0],
+        location: '',
+        country: 'todos',
+        place: 'todos',
+        people_in_photo: '',
+        tags: '',
+        category: 'familia',
+        event_type: 'general'
+    });
+
+    // Photo metadata extraction
+    const { extractMetadata, isExtracting, formatLocation } = usePhotoMetadata();
+    const [extractedMetadata, setExtractedMetadata] = useState<PhotoMetadata | null>(null);
+    const [showMetadataPanel, setShowMetadataPanel] = useState(false);
+    const [isApplyingMetadata, setIsApplyingMetadata] = useState(false);
+
+    // Photo editing states
+    const [editingPhoto, setEditingPhoto] = useState<FamilyPhoto | null>(null);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editFormData, setEditFormData] = useState<PhotoFormData>({
         description: '',
         date_taken: new Date().toISOString().split('T')[0],
         location: '',
@@ -407,13 +431,33 @@ const FotosFamiliaresPage: React.FC = () => {
         });
     }, [photos, selectedCategory, selectedYear, selectedMonth, selectedCountry, selectedDestination, otherLocation]);
 
-    const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
             setSelectedFile(file);
             const url = URL.createObjectURL(file);
             setPreviewUrl(url);
+            
+            // Resetear metadata anteriores
+            setExtractedMetadata(null);
+            setShowMetadataPanel(false);
+            
             setShowUploadModal(true);
+            
+            // Extraer metadata automáticamente
+            try {
+                console.log('🔍 Extracting metadata from selected photo...');
+                const metadata = await extractMetadata(file);
+                setExtractedMetadata(metadata);
+                
+                // Si encontramos metadata útil, mostrar el panel
+                if (metadata.dateTimeOriginal || metadata.latitude || metadata.make) {
+                    setShowMetadataPanel(true);
+                    console.log('✅ Metadata extracted and panel shown');
+                }
+            } catch (error) {
+                console.error('❌ Error extracting metadata:', error);
+            }
         }
     };
 
@@ -459,6 +503,126 @@ const FotosFamiliaresPage: React.FC = () => {
         const countryData = popularCountries[formData.country as keyof typeof popularCountries];
         return countryData?.destinations || [];
     }, [formData.country]);
+
+    // Aplicar metadata extraída al formulario
+    const applyMetadataToForm = async () => {
+        if (!extractedMetadata) return;
+        
+        setIsApplyingMetadata(true);
+        
+        try {
+            const updatedFormData = { ...formData };
+            
+            // Aplicar fecha si está disponible
+            if (extractedMetadata.dateTimeOriginal) {
+                const dateStr = extractedMetadata.dateTimeOriginal.toISOString().split('T')[0];
+                updatedFormData.date_taken = dateStr;
+                console.log('📅 Applied date from EXIF:', dateStr);
+            } else if (extractedMetadata.dateTime) {
+                const dateStr = extractedMetadata.dateTime.toISOString().split('T')[0];
+                updatedFormData.date_taken = dateStr;
+                console.log('📅 Applied date from EXIF (DateTime):', dateStr);
+            }
+            
+            // Aplicar ubicación GPS si está disponible
+            if (extractedMetadata.latitude && extractedMetadata.longitude) {
+                try {
+                    const locationString = await formatLocation(extractedMetadata.latitude, extractedMetadata.longitude);
+                    updatedFormData.location = locationString;
+                    console.log('📍 Applied GPS location:', locationString);
+                } catch (error) {
+                    console.error('❌ Error formatting GPS location:', error);
+                    // Usar coordenadas como fallback
+                    updatedFormData.location = `${extractedMetadata.latitude.toFixed(6)}, ${extractedMetadata.longitude.toFixed(6)}`;
+                }
+            }
+            
+            // Generar descripción automática basada en metadata
+            const descriptionParts = [];
+            if (extractedMetadata.make && extractedMetadata.model) {
+                descriptionParts.push(`Foto tomada con ${extractedMetadata.make} ${extractedMetadata.model}`);
+            }
+            if (extractedMetadata.description) {
+                descriptionParts.push(extractedMetadata.description);
+            }
+            if (extractedMetadata.userComment) {
+                descriptionParts.push(extractedMetadata.userComment);
+            }
+            
+            if (descriptionParts.length > 0 && !updatedFormData.description) {
+                updatedFormData.description = descriptionParts.join('. ');
+            }
+            
+            // Generar tags automáticos basados en metadata técnica
+            const autoTags = [];
+            if (extractedMetadata.flash) {
+                autoTags.push('con flash');
+            }
+            if (extractedMetadata.focalLength) {
+                autoTags.push(`${extractedMetadata.focalLength}mm`);
+            }
+            if (extractedMetadata.aperture) {
+                autoTags.push(`f/${extractedMetadata.aperture}`);
+            }
+            if (extractedMetadata.iso && extractedMetadata.iso > 100) {
+                autoTags.push(`ISO${extractedMetadata.iso}`);
+            }
+            
+            if (autoTags.length > 0) {
+                const existingTags = updatedFormData.tags ? updatedFormData.tags.split(',').map(t => t.trim()) : [];
+                const newTags = [...existingTags, ...autoTags].filter(Boolean);
+                updatedFormData.tags = Array.from(new Set(newTags)).join(', ');
+            }
+            
+            setFormData(updatedFormData);
+            console.log('✅ Metadata applied to form successfully');
+            
+        } catch (error) {
+            console.error('❌ Error applying metadata to form:', error);
+        } finally {
+            setIsApplyingMetadata(false);
+        }
+    };
+
+    // Formatear metadata para mostrar
+    const formatMetadataForDisplay = (metadata: PhotoMetadata) => {
+        const items = [];
+        
+        if (metadata.dateTimeOriginal || metadata.dateTime) {
+            const date = metadata.dateTimeOriginal || metadata.dateTime;
+            items.push(`📅 Fecha: ${date?.toLocaleString('es-ES')}`);
+        }
+        
+        if (metadata.latitude && metadata.longitude) {
+            items.push(`📍 GPS: ${metadata.latitude.toFixed(6)}, ${metadata.longitude.toFixed(6)}`);
+        }
+        
+        if (metadata.make && metadata.model) {
+            items.push(`📷 Cámara: ${metadata.make} ${metadata.model}`);
+        }
+        
+        if (metadata.focalLength) {
+            items.push(`🔍 Focal: ${metadata.focalLength}mm`);
+        }
+        
+        if (metadata.aperture) {
+            items.push(`⭕ Apertura: f/${metadata.aperture}`);
+        }
+        
+        if (metadata.iso) {
+            items.push(`🎞️ ISO: ${metadata.iso}`);
+        }
+        
+        if (metadata.exposureTime) {
+            items.push(`⏱️ Exposición: ${metadata.exposureTime}`);
+        }
+        
+        if (metadata.flash !== undefined) {
+            items.push(`⚡ Flash: ${metadata.flash ? 'Sí' : 'No'}`);
+        }
+        
+        return items;
+    };
 
     const handleSavePhoto = async () => {
         if (!selectedFile) return;
@@ -538,6 +702,144 @@ const FotosFamiliaresPage: React.FC = () => {
     // Función para ver detalles de la foto
     const handleViewPhoto = (photo: FamilyPhoto) => {
         setViewingPhoto(photo);
+    };
+
+    // Función para editar foto
+    const handleEditPhoto = (photo: FamilyPhoto) => {
+        setEditingPhoto(photo);
+        
+        // Mapear los datos de la foto al formulario de edición
+        const countryKey = Object.keys(popularCountries).find(key => 
+            popularCountries[key as keyof typeof popularCountries].name === photo.country
+        ) || 'todos';
+        
+        setEditFormData({
+            description: photo.description || '',
+            date_taken: photo.date_taken || new Date().toISOString().split('T')[0],
+            location: photo.location || '',
+            country: countryKey,
+            place: photo.place || 'todos',
+            people_in_photo: photo.people_in_photo || '',
+            tags: photo.tags || '',
+            category: photo.category,
+            event_type: 'general' // Este campo podría no estar en la foto existente
+        });
+        
+        setShowEditModal(true);
+        console.log('📝 Abriendo modal de edición para foto:', photo.photo_id);
+    };
+
+    // Función para cerrar modal de edición
+    const handleCloseEditModal = () => {
+        setShowEditModal(false);
+        setEditingPhoto(null);
+        setEditFormData({
+            description: '',
+            date_taken: new Date().toISOString().split('T')[0],
+            location: '',
+            country: 'todos',
+            place: 'todos',
+            people_in_photo: '',
+            tags: '',
+            category: 'familia',
+            event_type: 'general'
+        });
+    };
+
+    // Función para manejar cambios en el formulario de edición
+    const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        
+        if (name === 'location') {
+            setEditFormData(prev => ({
+                ...prev,
+                [name]: value,
+                country: value !== prev.location ? 'todos' : prev.country,
+                place: value !== prev.location ? 'todos' : prev.place
+            }));
+        } else {
+            setEditFormData(prev => ({ ...prev, [name]: value }));
+        }
+    };
+
+    // Función para guardar cambios de edición
+    const handleSaveEditedPhoto = async () => {
+        if (!editingPhoto) return;
+
+        const twinId = getTwinId();
+        if (!twinId) {
+            console.error('No Twin ID available');
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            console.log('💾 Guardando cambios de foto:', editingPhoto.photo_id);
+
+            // Crear objeto con metadata actualizada - INCLUIR TODOS LOS CAMPOS
+            const updatedMetadata = {
+                description: editFormData.description,
+                date_taken: editFormData.date_taken,
+                location: editFormData.location,
+                country: editFormData.country !== 'todos' ? 
+                    (popularCountries[editFormData.country as keyof typeof popularCountries]?.name || editFormData.country) : '',
+                place: editFormData.place !== 'todos' ? editFormData.place : '',
+                people_in_photo: editFormData.people_in_photo,
+                category: editFormData.category,
+                tags: editFormData.tags,
+                event_type: editFormData.event_type,
+                // CAMPOS ADICIONALES NECESARIOS para el backend
+                filename: editingPhoto.filename,
+                file_size: editingPhoto.file_size,
+                uploaded_at: editingPhoto.uploaded_at,
+                photo_url: editingPhoto.photo_url,
+                photo_id: editingPhoto.photo_id
+            };
+
+            console.log('📋 Metadata completa que se enviará:', updatedMetadata);
+
+            // Llamar al API para actualizar la foto
+            const response = await twinApiService.updateFamilyPhoto(twinId, editingPhoto.photo_id, updatedMetadata);
+
+            if (response.success) {
+                console.log('✅ Foto actualizada exitosamente');
+                
+                // Actualizar la foto en el estado local con TODOS los campos
+                setPhotos(prevPhotos => prevPhotos.map(photo => 
+                    photo.photo_id === editingPhoto.photo_id 
+                        ? {
+                            ...photo,
+                            description: editFormData.description,
+                            date_taken: editFormData.date_taken,
+                            location: editFormData.location,
+                            country: editFormData.country !== 'todos' ? 
+                                (popularCountries[editFormData.country as keyof typeof popularCountries]?.name || editFormData.country) : '',
+                            place: editFormData.place !== 'todos' ? editFormData.place : '',
+                            people_in_photo: editFormData.people_in_photo,
+                            tags: editFormData.tags,
+                            category: editFormData.category,
+                            event_type: editFormData.event_type,
+                            // Mantener los campos que no cambian
+                            filename: photo.filename,
+                            file_size: photo.file_size,
+                            uploaded_at: photo.uploaded_at,
+                            photo_url: photo.photo_url
+                        }
+                        : photo
+                ));
+                
+                handleCloseEditModal();
+                alert('Foto actualizada exitosamente');
+            } else {
+                console.error('❌ Error actualizando foto:', response.error);
+                alert('Error al actualizar la foto: ' + response.error);
+            }
+        } catch (error) {
+            console.error('❌ Error en handleSaveEditedPhoto:', error);
+            alert('Error al actualizar la foto. Por favor, inténtalo de nuevo.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     // Función para eliminar foto
@@ -650,6 +952,9 @@ const FotosFamiliaresPage: React.FC = () => {
     const resetForm = () => {
         setSelectedFile(null);
         setPreviewUrl('');
+        setExtractedMetadata(null);
+        setShowMetadataPanel(false);
+        setIsApplyingMetadata(false);
         setFormData({
             description: '',
             date_taken: new Date().toISOString().split('T')[0],
@@ -1037,6 +1342,7 @@ const FotosFamiliaresPage: React.FC = () => {
                                                 <Download size={16} />
                                             </button>
                                             <button 
+                                                onClick={() => handleEditPhoto(photo)}
                                                 className="p-2 bg-white rounded-full text-gray-700 hover:text-green-600 transition-colors"
                                                 title="Editar foto"
                                             >
@@ -1152,6 +1458,58 @@ const FotosFamiliaresPage: React.FC = () => {
                                             <p>📁 {selectedFile.name}</p>
                                             <p>📊 {(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
                                         </div>
+
+                                        {/* Panel de metadata extraída */}
+                                        {isExtracting && (
+                                            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                                <div className="flex items-center gap-2">
+                                                    <Loader2 size={16} className="animate-spin text-blue-600" />
+                                                    <span className="text-sm text-blue-700">Extrayendo información de la foto...</span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {extractedMetadata && showMetadataPanel && (
+                                            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <Wand2 size={16} className="text-green-600" />
+                                                        <h5 className="font-medium text-green-800">Información Detectada</h5>
+                                                    </div>
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={applyMetadataToForm}
+                                                        disabled={isApplyingMetadata}
+                                                        className="bg-green-600 hover:bg-green-700 text-white"
+                                                    >
+                                                        {isApplyingMetadata ? (
+                                                            <>
+                                                                <Loader2 size={14} className="mr-1 animate-spin" />
+                                                                Aplicando...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Wand2 size={14} className="mr-1" />
+                                                                Aplicar
+                                                            </>
+                                                        )}
+                                                    </Button>
+                                                </div>
+                                                
+                                                <div className="space-y-1 text-xs text-green-700">
+                                                    {formatMetadataForDisplay(extractedMetadata).map((item, index) => (
+                                                        <div key={index}>{item}</div>
+                                                    ))}
+                                                </div>
+                                                
+                                                {formatMetadataForDisplay(extractedMetadata).length === 0 && (
+                                                    <p className="text-xs text-green-600">
+                                                        <Info size={12} className="inline mr-1" />
+                                                        No se encontró metadata útil en esta imagen
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Formulario de metadatos */}
@@ -1545,6 +1903,198 @@ const FotosFamiliaresPage: React.FC = () => {
                                 ))}
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* Modal de edición de foto */}
+                {showEditModal && editingPhoto && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                        <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-semibold text-gray-800">
+                                    Editar Foto: {editingPhoto.filename}
+                                </h3>
+                                <button
+                                    onClick={handleCloseEditModal}
+                                    className="text-gray-500 hover:text-gray-700"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            {/* Vista previa de la foto */}
+                            <div className="mb-6">
+                                <img
+                                    src={editingPhoto.photo_url}
+                                    alt={editingPhoto.description || editingPhoto.filename}
+                                    className="w-full h-48 object-cover rounded-lg"
+                                />
+                            </div>
+
+                            {/* Formulario de edición */}
+                            <div className="space-y-4">
+                                {/* Descripción */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Descripción:
+                                    </label>
+                                    <textarea
+                                        name="description"
+                                        value={editFormData.description}
+                                        onChange={handleEditFormChange}
+                                        rows={3}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="Describe esta foto..."
+                                    />
+                                </div>
+
+                                {/* Fecha */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Fecha tomada:
+                                    </label>
+                                    <input
+                                        type="date"
+                                        name="date_taken"
+                                        value={editFormData.date_taken}
+                                        onChange={handleEditFormChange}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                {/* Ubicación */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Ubicación:
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="location"
+                                        value={editFormData.location}
+                                        onChange={handleEditFormChange}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="Ej: París, Francia"
+                                    />
+                                </div>
+
+                                {/* País */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        País:
+                                    </label>
+                                    <select
+                                        name="country"
+                                        value={editFormData.country}
+                                        onChange={handleEditFormChange}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="todos">Todos los países</option>
+                                        {Object.entries(popularCountries).map(([key, country]) => (
+                                            <option key={key} value={key}>
+                                                {country.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Lugar específico */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Lugar específico:
+                                    </label>
+                                    <select
+                                        name="place"
+                                        value={editFormData.place}
+                                        onChange={handleEditFormChange}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="todos">Todos los lugares</option>
+                                        {editFormData.country !== 'todos' && 
+                                            popularCountries[editFormData.country as keyof typeof popularCountries]?.destinations?.map((dest) => (
+                                                <option key={dest} value={dest}>
+                                                    {dest}
+                                                </option>
+                                            ))
+                                        }
+                                    </select>
+                                </div>
+
+                                {/* Personas en la foto */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Personas en la foto:
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="people_in_photo"
+                                        value={editFormData.people_in_photo}
+                                        onChange={handleEditFormChange}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="Ej: María, Juan, Pedro"
+                                    />
+                                </div>
+
+                                {/* Etiquetas */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Etiquetas:
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="tags"
+                                        value={editFormData.tags}
+                                        onChange={handleEditFormChange}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="Ej: vacaciones, familia, cumpleaños"
+                                    />
+                                </div>
+
+                                {/* Categoría */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Categoría:
+                                    </label>
+                                    <select
+                                        name="category"
+                                        value={editFormData.category}
+                                        onChange={handleEditFormChange}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="familia">👨‍👩‍👧‍👦 Familia</option>
+                                        <option value="viajes">✈️ Viajes</option>
+                                        <option value="eventos">🎉 Eventos</option>
+                                        <option value="cotidiano">🏠 Cotidiano</option>
+                                        <option value="trabajo">💼 Trabajo</option>
+                                        <option value="hobbies">🎨 Hobbies</option>
+                                        <option value="mascotas">🐕 Mascotas</option>
+                                        <option value="comida">🍽️ Comida</option>
+                                        <option value="naturaleza">🌿 Naturaleza</option>
+                                        <option value="deportes">⚽ Deportes</option>
+                                        <option value="celebraciones">🎊 Celebraciones</option>
+                                        <option value="otros">📋 Otros</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Botones del modal */}
+                            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+                                <button
+                                    onClick={handleCloseEditModal}
+                                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                    disabled={isLoading}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleSaveEditedPhoto}
+                                    disabled={isLoading}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    {isLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>}
+                                    {isLoading ? 'Guardando...' : 'Guardar Cambios'}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

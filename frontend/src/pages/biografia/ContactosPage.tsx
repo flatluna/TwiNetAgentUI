@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useMsal } from "@azure/msal-react";
 import { Button } from "@/components/ui/button";
-import { twinApiService } from "@/services/twinApiService";
+import { twinApiService, Contact } from "@/services/twinApiService";
 import GoogleMapsLoader from "@/utils/googleMapsLoader";
 import { 
     Plus, 
@@ -22,25 +22,6 @@ import {
     Briefcase,
     RefreshCw
 } from "lucide-react";
-
-interface Contact {
-    contact_id: string;
-    first_name: string;
-    last_name: string;
-    nickname?: string;
-    phone_mobile?: string;
-    phone_work?: string;
-    phone_home?: string;
-    email?: string;
-    address?: string;
-    company?: string;
-    position?: string;
-    relationship: 'familia' | 'amigo' | 'colega' | 'conocido' | 'profesional' | 'otro';
-    birthday?: string;
-    notes?: string;
-    created_at?: string;
-    updated_at?: string;
-}
 
 interface ContactFormData {
     first_name: string;
@@ -265,38 +246,7 @@ const ContactosPage: React.FC = () => {
                 setContacts(response.data);
             } else {
                 console.error('Error loading contacts:', response.error);
-                // Fall back to mock data for development
-                setContacts([
-                    {
-                        contact_id: '1',
-                        first_name: 'María',
-                        last_name: 'García',
-                        nickname: 'Mari',
-                        phone_mobile: '+34 666 123 456',
-                        phone_work: '+34 91 234 5678',
-                        email: 'maria.garcia@email.com',
-                        address: 'Calle Mayor 123, Madrid',
-                        company: 'Tech Solutions',
-                        position: 'Desarrolladora',
-                        relationship: 'amigo',
-                        birthday: '1990-05-15',
-                        notes: 'Compañera de universidad, muy buena programadora',
-                        created_at: '2024-01-15T10:00:00Z'
-                    },
-                    {
-                        contact_id: '2',
-                        first_name: 'Carlos',
-                        last_name: 'Rodríguez',
-                        phone_mobile: '+34 677 987 654',
-                        phone_work: '+34 91 987 6543',
-                        email: 'carlos.rodriguez@empresa.com',
-                        company: 'Consultora ABC',
-                        position: 'Director',
-                        relationship: 'colega',
-                        notes: 'Cliente importante, proyectos de software',
-                        created_at: '2024-02-10T14:30:00Z'
-                    }
-                ]);
+                setContacts([]);
             }
         } catch (error) {
             console.error('Error loading contacts:', error);
@@ -331,6 +281,25 @@ const ContactosPage: React.FC = () => {
         });
     };
 
+    // Function to map ContactFormData to ContactData (frontend to backend)
+    const mapFormDataToContactData = (formData: ContactFormData): any => {
+        return {
+            Nombre: formData.first_name,
+            Apellido: formData.last_name,
+            Apodo: formData.nickname || '',
+            TelefonoMovil: formData.phone_mobile || '',
+            TelefonoTrabajo: formData.phone_work || '',
+            TelefonoCasa: formData.phone_home || '',
+            Email: formData.email || '',
+            Direccion: formData.address || '',
+            Empresa: formData.company || '',
+            Cargo: formData.position || '',
+            Relacion: formData.relationship,
+            Cumpleanos: formData.birthday || '',
+            Notas: formData.notes || ''
+        };
+    };
+
     // Handle create contact
     const handleCreateContact = async () => {
         const twinId = getTwinId();
@@ -346,22 +315,40 @@ const ContactosPage: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const response = await twinApiService.createContact(twinId, formData);
+            // Map form data to backend format
+            const contactData = mapFormDataToContactData(formData);
+            console.log('🔄 Creating contact with data:', contactData);
+            
+            const response = await twinApiService.createContact(twinId, contactData);
+            console.log('✅ Create response:', response);
+            
             if (response.success && response.data) {
-                setContacts(prev => [...prev, response.data!]);
-                setShowCreateModal(false);
+                // Add the new contact to the list
+                setContacts(prev => {
+                    const updatedContacts = [...prev, response.data!];
+                    console.log('📋 Updated contacts list after create:', updatedContacts);
+                    return updatedContacts;
+                });
+                
+                console.log('✅ Contact created successfully');
+                alert('Contacto creado correctamente');
+                
+                // Recargar la lista de contactos para asegurar que esté sincronizada
+                await refreshContacts();
+                
+                // Reset form but keep modal open for user to decide
                 resetForm();
-                console.log('Contact created successfully');
+                // NO cerrar el modal automáticamente
+                // setShowCreateModal(false);
             } else {
-                console.error('Error creating contact:', response.error);
+                console.error('❌ Error creating contact:', response.error);
                 alert('Error al crear el contacto: ' + (response.error || 'Error desconocido'));
             }
         } catch (error) {
-            console.error('Error creating contact:', error);
+            console.error('❌ Error creating contact:', error);
             alert('Error al crear el contacto. Por favor, inténtelo de nuevo.');
         } finally {
             setIsLoading(false);
-            setShowCreateModal(false);
         }
     };
 
@@ -403,21 +390,39 @@ const ContactosPage: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const response = await twinApiService.updateContact(twinId, editingContact.contact_id, formData);
+            // Map form data to backend format
+            const contactData = mapFormDataToContactData(formData);
+            console.log('🔄 Updating contact with data:', contactData);
+            
+            const response = await twinApiService.updateContact(twinId, editingContact.contact_id, contactData);
+            console.log('✅ Update response:', response);
+            
             if (response.success && response.data) {
-                setContacts(prev => prev.map(c => 
-                    c.contact_id === editingContact.contact_id ? response.data! : c
-                ));
-                setShowEditModal(false);
-                setEditingContact(null);
-                resetForm();
-                console.log('Contact updated successfully');
+                // Update the contact in the list with the returned data
+                setContacts(prev => {
+                    const updatedContacts = prev.map(c => 
+                        c.contact_id === editingContact.contact_id ? response.data! : c
+                    );
+                    console.log('📋 Updated contacts list:', updatedContacts);
+                    return updatedContacts;
+                });
+                
+                console.log('✅ Contact updated successfully');
+                alert('Contacto actualizado correctamente');
+                
+                // Recargar la lista de contactos para asegurar que esté sincronizada
+                await refreshContacts();
+                
+                // NO cerrar el modal automáticamente - el usuario debe hacerlo manualmente
+                // setShowEditModal(false);
+                // setEditingContact(null);
+                // resetForm();
             } else {
-                console.error('Error updating contact:', response.error);
+                console.error('❌ Error updating contact:', response.error);
                 alert('Error al actualizar el contacto: ' + (response.error || 'Error desconocido'));
             }
         } catch (error) {
-            console.error('Error updating contact:', error);
+            console.error('❌ Error updating contact:', error);
             alert('Error al actualizar el contacto. Por favor, inténtelo de nuevo.');
         } finally {
             setIsLoading(false);
@@ -929,6 +934,18 @@ const ContactosPage: React.FC = () => {
                                                 </>
                                             )}
                                         </Button>
+                                        <Button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowCreateModal(false);
+                                                resetForm();
+                                            }}
+                                            disabled={isLoading}
+                                            className="bg-green-600 hover:bg-green-700"
+                                        >
+                                            <X className="mr-2" size={16} />
+                                            Cerrar
+                                        </Button>
                                     </div>
                                 </form>
                             </div>
@@ -1150,6 +1167,19 @@ const ContactosPage: React.FC = () => {
                                                     Actualizar Contacto
                                                 </>
                                             )}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowEditModal(false);
+                                                setEditingContact(null);
+                                                resetForm();
+                                            }}
+                                            disabled={isLoading}
+                                            className="bg-green-600 hover:bg-green-700"
+                                        >
+                                            <X className="mr-2" size={16} />
+                                            Cerrar
                                         </Button>
                                     </div>
                                 </form>

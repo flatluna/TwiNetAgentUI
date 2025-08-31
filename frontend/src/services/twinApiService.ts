@@ -5,13 +5,47 @@
 // En desarrollo, usar rutas relativas para aprovechar el proxy de Vite
 // En producción, usar la URL completa
 const API_BASE_URL = import.meta.env.DEV 
-    ? 'http://localhost:7072' // Usar URL completa temporalmente para debug
-    : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:7072');
+    ? 'http://localhost:7011'
+    : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:7011');
 
 console.log('🔧 API_BASE_URL configured as:', API_BASE_URL);
 console.log('🔧 Development mode:', import.meta.env.DEV);
 
 const API_KEY = import.meta.env.VITE_API_KEY || 'B509918774DDE22A5BF94EDB4F145CB6E06F1CBCCC49D492D27FFD4AC3667A71';
+
+// Interface for Family Member (actualizada según nueva API)
+export interface FamilyMember {
+    id?: string;
+    twinId: string;
+    parentesco: string; // Cambiado de relationshipType
+    nombre: string;     // Cambiado de firstName
+    apellido?: string;  // Cambiado de lastName (ahora opcional)
+    fechaNacimiento?: string; // Cambiado de dateOfBirth
+    numeroCelular?: string;   // Cambiado de phoneNumber
+    email?: string;
+    urlFoto?: string;    // Cambiado de photoUrl
+    notas?: string;      // Cambiado de notes
+    createdDate?: string; // Cambiado de createdAt
+    type?: string;       // Nuevo campo para tipo de documento
+    
+    // Campos legacy para compatibilidad (deprecated)
+    firstName?: string;  // @deprecated - usar 'nombre'
+    lastName?: string;   // @deprecated - usar 'apellido'
+    relationshipType?: string; // @deprecated - usar 'parentesco'
+    dateOfBirth?: string; // @deprecated - usar 'fechaNacimiento'
+    phoneNumber?: string; // @deprecated - usar 'numeroCelular'
+    photoUrl?: string;   // @deprecated - usar 'urlFoto'
+    notes?: string;      // @deprecated - usar 'notas'
+    createdAt?: string;  // @deprecated - usar 'createdDate'
+    updatedAt?: string;  // @deprecated
+    
+    // Campos removidos en nueva API
+    address?: string;      // @deprecated - no usado en nueva API
+    occupation?: string;   // @deprecated - no usado en nueva API
+    isAlive?: boolean;     // @deprecated - no usado en nueva API
+    deathDate?: string;    // @deprecated - no usado en nueva API
+    emergencyContact?: boolean; // @deprecated - no usado en nueva API
+}
 
 export interface TwinProfileData {
     twinId?: string; // Add twinId field for backend compatibility
@@ -81,9 +115,37 @@ export interface ApiResponse<T> {
     error?: string;
 }
 
-// Contact interfaces
+// Contact interfaces - Updated to match backend C# ContactData class
 export interface ContactData {
-    contact_id?: string;
+    Id?: string;
+    TwinID?: string;
+    Nombre: string;
+    Apellido: string;
+    Relacion: 'familia' | 'amigo' | 'colega' | 'conocido' | 'profesional' | 'otro';
+    Apodo?: string;
+    TelefonoMovil?: string;
+    TelefonoTrabajo?: string;
+    TelefonoCasa?: string;
+    Email?: string;
+    Direccion?: string;
+    Empresa?: string;
+    Cargo?: string;
+    Cumpleanos?: string;
+    Notas?: string;
+    CreatedDate?: string;
+    Type?: string;
+}
+
+export interface ContactResponse extends ContactData {
+    Id: string;
+    TwinID: string;
+    CreatedDate: string;
+    Type: string;
+}
+
+// Frontend Contact interface with English field names
+export interface Contact {
+    contact_id: string;
     first_name: string;
     last_name: string;
     nickname?: string;
@@ -99,11 +161,71 @@ export interface ContactData {
     notes?: string;
     created_at?: string;
     updated_at?: string;
+    type?: string;
 }
 
-export interface ContactResponse extends ContactData {
-    contact_id: string;
-    created_at: string;
+// Education interfaces - Backend C# EducationData class
+export interface EducationData {
+    Id?: string;
+    TwinID?: string;
+    Institucion: string;
+    TipoEducacion: 'primaria' | 'secundaria' | 'preparatoria' | 'universidad' | 'posgrado' | 'certificacion' | 'diploma' | 'curso' | 'otro';
+    TituloObtenido?: string;
+    CampoEstudio?: string;
+    FechaInicio: string;
+    FechaFin?: string;
+    EnProgreso: boolean;
+    Pais?: string;
+    Descripcion?: string;
+    LogrosDestacados?: string;
+    Promedio?: string;
+    Creditos?: number;
+    CreatedDate?: string;
+    Type?: string;
+}
+
+export interface EducationResponse extends EducationData {
+    Id: string;
+    TwinID: string;
+    CreatedDate: string;
+    Type: string;
+}
+
+// Frontend Education interface with English field names
+export interface EducationDocument {
+    documentId: string;
+    fileName: string;
+    filePath: string;
+    containerName: string;
+    processedAt: string;
+    success: boolean;
+    errorMessage?: string;
+    textContent?: string;
+    htmlContent?: string;
+    documentType: string;
+    sasUrl?: string; // SAS URL for secure access
+    sourceUri?: string; // Alternative source URI
+}
+
+export interface Education {
+    id?: string; // Backend returns this field
+    education_id?: string; // Legacy field name
+    institution: string;
+    education_type: 'primaria' | 'secundaria' | 'preparatoria' | 'universidad' | 'posgrado' | 'certificacion' | 'diploma' | 'curso' | 'otro';
+    degree_obtained?: string;
+    field_of_study?: string;
+    start_date: string;
+    end_date?: string;
+    in_progress: boolean;
+    country?: string;
+    description?: string;
+    achievements?: string;
+    gpa?: string;
+    credits?: number;
+    created_at?: string;
+    updated_at?: string;
+    type?: string;
+    documents?: EducationDocument[]; // Array of uploaded documents with proper typing
 }
 
 class TwinApiService {
@@ -175,16 +297,51 @@ class TwinApiService {
                 responseData = data.profile;
                 console.log('🔧 Extracted profile data:', responseData);
             }
+            // Handle Twin profile responses - ensure required fields are present
+            else if (data && (data.firstName || data.lastName || data.email || data.twinName)) {
+                responseData = this.mapTwinProfileFromBackend(data);
+                console.log('🔧 Mapped Twin profile data:', responseData);
+            }
             // Handle contacts endpoint that returns {contacts: [...], count: number}
             else if (data && data.contacts && Array.isArray(data.contacts)) {
                 // Map Spanish field names to English for contacts
                 responseData = data.contacts.map((contact: any) => this.mapContactFromBackend(contact));
                 console.log('🔧 Extracted and mapped contacts data:', responseData);
             }
+            // Handle education endpoint that returns {educationRecords: [...], count: number}
+            else if (data && data.educationRecords && Array.isArray(data.educationRecords)) {
+                // Map education records from backend
+                responseData = data.educationRecords.map((education: any) => this.mapEducationFromBackend(education));
+                console.log('🔧 Extracted and mapped education records:', responseData);
+            }
             // Handle single contact response (for create/update operations)
-            else if (data && (data.nombre || data.apellido)) {
+            else if (data && (data.nombre || data.apellido || data.Nombre || data.Apellido)) {
                 responseData = this.mapContactFromBackend(data);
                 console.log('🔧 Mapped single contact data:', responseData);
+            }
+            // Handle single education response (for create/update operations)
+            else if (data && (data.institucion || data.Institucion || data.Institution || 
+                             data.tipoEducacion || data.TipoEducacion || data.EducationType ||
+                             data.Type === 'education' || data.type === 'education')) {
+                responseData = this.mapEducationFromBackend(data);
+                console.log('🔧 Mapped single education data:', responseData);
+            }
+            // Handle array of contacts or education directly
+            else if (Array.isArray(data)) {
+                responseData = data.map((item: any) => {
+                    // Check if it looks like a contact (Spanish or English fields)
+                    if (item.nombre || item.apellido || item.Nombre || item.Apellido) {
+                        return this.mapContactFromBackend(item);
+                    }
+                    // Check if it looks like education (Spanish, English, or PascalCase fields)
+                    else if (item.institucion || item.Institucion || item.Institution || 
+                             item.tipoEducacion || item.TipoEducacion || item.EducationType ||
+                             item.Type === 'education' || item.type === 'education') {
+                        return this.mapEducationFromBackend(item);
+                    }
+                    return item;
+                });
+                console.log('🔧 Mapped array of items:', responseData);
             }
             
             return {
@@ -201,27 +358,140 @@ class TwinApiService {
     }
 
     /**
-     * Helper method to map contact data from backend (Spanish) to frontend (English)
+     * Helper method to map Twin profile data from backend
      */
-    private mapContactFromBackend(backendContact: any): ContactResponse {
+    private mapTwinProfileFromBackend(backendTwin: any): TwinProfileResponse {
         return {
-            contact_id: backendContact.contact_id || backendContact.id,
-            first_name: backendContact.nombre || '',
-            last_name: backendContact.apellido || '',
-            nickname: backendContact.apodo || '',
-            phone_mobile: backendContact.telefono_movil || '',
-            phone_work: backendContact.telefono_trabajo || '',
-            phone_home: backendContact.telefono_casa || '',
-            email: backendContact.email || '',
-            address: backendContact.direccion || '',
-            company: backendContact.empresa || '',
-            position: backendContact.posicion || '',
-            relationship: backendContact.relacion || 'otro',
-            birthday: backendContact.cumpleanos || '',
-            notes: backendContact.notas || '',
-            created_at: backendContact.created_at || backendContact.fecha_creacion || '',
-            updated_at: backendContact.updated_at || backendContact.fecha_actualizacion || ''
+            ...backendTwin,
+            id: backendTwin.id || backendTwin.twinId || '',
+            twinName: backendTwin.twinName || backendTwin.twin_name || '',
+            createdAt: backendTwin.createdAt || backendTwin.created_at || new Date().toISOString(),
+            lastModified: backendTwin.lastModified || backendTwin.last_modified || new Date().toISOString()
         };
+    }
+
+    /**
+     * Helper method to map education data from backend (C# EducationData class)
+     * Maps Spanish field names to English field names expected by frontend
+     */
+    private mapEducationFromBackend(backendEducation: any): Education {
+        // Map backend field names to frontend English field names
+        // Based on the ToDict() method from .NET backend
+        const educationId = backendEducation.id || backendEducation.Id || '';
+        
+        const mappedEducation: Education = {
+            id: educationId, // Primary ID field returned by backend (lowercase 'id' from ToDict)
+            education_id: educationId, // Legacy field for compatibility
+            institution: backendEducation.institution || backendEducation.Institution || '', // lowercase from ToDict
+            education_type: (backendEducation.education_type || backendEducation.EducationType || 'otro') as any, // underscore from ToDict
+            degree_obtained: backendEducation.degree_obtained || backendEducation.DegreeObtained || '', // underscore from ToDict
+            field_of_study: backendEducation.field_of_study || backendEducation.FieldOfStudy || '', // underscore from ToDict
+            start_date: backendEducation.start_date || backendEducation.StartDate || '', // underscore from ToDict
+            end_date: backendEducation.end_date || backendEducation.EndDate || '', // underscore from ToDict
+            in_progress: backendEducation.in_progress !== undefined ? backendEducation.in_progress : (backendEducation.InProgress !== undefined ? backendEducation.InProgress : false), // underscore from ToDict
+            country: backendEducation.country || backendEducation.Country || '', // lowercase from ToDict
+            description: backendEducation.description || backendEducation.Description || '', // lowercase from ToDict
+            achievements: backendEducation.achievements || backendEducation.Achievements || '', // lowercase from ToDict
+            gpa: backendEducation.gpa || backendEducation.Gpa || '', // lowercase from ToDict
+            credits: backendEducation.credits || backendEducation.Credits || 0, // lowercase from ToDict
+            created_at: backendEducation.createdDate || backendEducation.CreatedDate || new Date().toISOString(), // createdDate from ToDict
+            updated_at: backendEducation.UpdatedDate || backendEducation.updatedDate || '',
+            type: backendEducation.type || backendEducation.Type || 'education', // lowercase from ToDict
+            documents: (backendEducation.documents || backendEducation.Documents || []).map((doc: any): EducationDocument => {
+                const sasUrl = doc.sasUrl || doc.SasUrl || doc.SASURL || doc.sas_url || '';
+                console.log('🔗 Document URL mapping:', {
+                    fileName: doc.fileName || doc.FileName || '',
+                    original: doc,
+                    sasUrl: doc.sasUrl,
+                    SasUrl: doc.SasUrl,
+                    SASURL: doc.SASURL,
+                    sas_url: doc.sas_url,
+                    mapped: sasUrl
+                });
+                
+                return {
+                    documentId: doc.documentId || doc.DocumentId || '',
+                    fileName: doc.fileName || doc.FileName || '',
+                    filePath: doc.filePath || doc.FilePath || '',
+                    containerName: doc.containerName || doc.ContainerName || '',
+                    processedAt: doc.processedAt || doc.ProcessedAt || '',
+                    success: doc.success !== undefined ? doc.success : (doc.Success !== undefined ? doc.Success : true),
+                    errorMessage: doc.errorMessage || doc.ErrorMessage || '',
+                    textContent: doc.textContent || doc.TextContent || '',
+                    htmlContent: doc.htmlContent || doc.HtmlContent || '',
+                    documentType: doc.documentType || doc.DocumentType || 'Education',
+                    sasUrl: sasUrl,
+                    sourceUri: doc.sourceUri || doc.SourceUri || doc.source_uri || ''
+                };
+            }) // Include documents array with proper mapping
+        };
+
+        console.log('🎓 Mapped education from backend (.NET ToDict format):', {
+            input: backendEducation,
+            output: mappedEducation,
+            documentsInfo: {
+                backendDocuments: backendEducation.documents,
+                backendDocumentsPascal: backendEducation.Documents,
+                finalDocuments: mappedEducation.documents,
+                documentsLength: mappedEducation.documents?.length,
+                // Let's see all possible document fields
+                allBackendKeys: Object.keys(backendEducation),
+                rawDocumentsArray: backendEducation.Documents || backendEducation.documents,
+                firstDocumentStructure: (backendEducation.Documents || backendEducation.documents)?.[0],
+                mappedDocumentsPreview: mappedEducation.documents?.map(doc => ({
+                    id: doc.documentId,
+                    name: doc.fileName,
+                    type: doc.documentType
+                }))
+            },
+            fields: {
+                id: `${backendEducation.id} → ${mappedEducation.id}`,
+                institution: `${backendEducation.institution} → ${mappedEducation.institution}`,
+                education_type: `${backendEducation.education_type} → ${mappedEducation.education_type}`,
+                country: `${backendEducation.country} → ${mappedEducation.country}`,
+                start_date: `${backendEducation.start_date} → ${mappedEducation.start_date}`
+            }
+        });
+        return mappedEducation;
+    }
+
+    /**
+     * Helper method to map contact data from backend (C# ContactData class)
+     * Maps Spanish field names to English field names expected by frontend
+     */
+    private mapContactFromBackend(backendContact: any): Contact {
+        // Map backend Spanish field names to frontend English field names
+        // Handle both capitalized and lowercase versions
+        const mappedContact: Contact = {
+            contact_id: backendContact.Id || backendContact.id || '',
+            first_name: backendContact.Nombre || backendContact.nombre || '',
+            last_name: backendContact.Apellido || backendContact.apellido || '',
+            nickname: backendContact.Apodo || backendContact.apodo || '',
+            phone_mobile: backendContact.TelefonoMovil || backendContact.telefonoMovil || '',
+            phone_work: backendContact.TelefonoTrabajo || backendContact.telefonoTrabajo || '',
+            phone_home: backendContact.TelefonoCasa || backendContact.telefonoCasa || '',
+            email: backendContact.Email || backendContact.email || '',
+            address: backendContact.Direccion || backendContact.direccion || '',
+            company: backendContact.Empresa || backendContact.empresa || '',
+            position: backendContact.Cargo || backendContact.cargo || '',
+            relationship: (backendContact.Relacion || backendContact.relacion || 'otro') as any,
+            birthday: backendContact.Cumpleanos || backendContact.cumpleanos || '',
+            notes: backendContact.Notas || backendContact.notas || '',
+            created_at: backendContact.CreatedDate || backendContact.createdDate || new Date().toISOString(),
+            updated_at: backendContact.UpdatedDate || backendContact.updatedDate || '',
+            type: backendContact.Type || backendContact.type || 'contact'
+        };
+
+        console.log('🔄 Mapped contact from backend:', {
+            input: backendContact,
+            output: mappedContact,
+            fields: {
+                id: `${backendContact.Id || backendContact.id} → ${mappedContact.contact_id}`,
+                name: `${backendContact.Nombre || backendContact.nombre} → ${mappedContact.first_name}`,
+                lastName: `${backendContact.Apellido || backendContact.apellido} → ${mappedContact.last_name}`
+            }
+        });
+        return mappedContact;
     }
 
     /**
@@ -509,7 +779,7 @@ class TwinApiService {
     }
 
     /**
-     * Upload a family photo for a twin using FormData (new API)
+     * Upload a family photo for a twin using JSON with base64 data (updated API)
      */
     async uploadFamilyPhotoWithMetadata(
         twinId: string,
@@ -539,56 +809,60 @@ class TwinApiService {
         console.log('  - File:', file.name, file.size, 'bytes');
         console.log('  - Metadata received:', metadata);
 
-        // Create FormData
-        const formData = new FormData();
-        formData.append('photo', file);
-        
-        // Metadata with custom path for family photos
-        const photoMetadata = {
-            description: metadata.description,
-            date_taken: metadata.date_taken,
-            location: metadata.location,
-            country: metadata.country,
-            place: metadata.place,
-            people_in_photo: metadata.people_in_photo,
-            category: "Familia",
-            tags: metadata.tags,
-            file_path: `familia/${metadata.event_type}/${file.name}` // Using event_type in path instead of category
-        };
-        
-        console.log('🔍 Photo metadata being sent to backend:', photoMetadata);
-        
-        formData.append('metadata', JSON.stringify(photoMetadata));
-
-        // Use fetch directly for FormData (don't use makeRequest as it adds JSON headers)
         try {
-            const response = await fetch(`${API_BASE_URL}/api/twins/${twinId}/upload-photo-with-metadata`, {
-                method: 'POST',
-                headers: {
-                    'x-api-key': API_KEY,
-                    // Don't set Content-Type, let browser set it with boundary for FormData
-                },
-                body: formData,
+            // Convert file to base64
+            const photoData = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
             });
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('❌ Photo upload failed:', response.status, errorText);
-                return {
-                    success: false,
-                    error: `HTTP ${response.status}: ${errorText}`,
-                    data: undefined
-                };
-            }
-
-            const data = await response.json();
-            console.log('✅ Photo uploaded successfully:', data);
-            
-            return {
-                success: true,
-                data: data,
-                error: undefined
+            // Format metadata to match backend expectations
+            const photoMetadata = {
+                description: metadata.description || '',
+                dateTaken: metadata.date_taken,
+                location: metadata.location || '',
+                peopleInPhoto: metadata.people_in_photo || '',
+                category: "Familia",
+                tags: metadata.tags || '',
+                filePath: `fotos/${metadata.category || 'Familia'}/${(metadata.event_type || 'general').replace(/[^\w\-]/g, '_')}/${file.name.replace(/[^\w\-\.]/g, '_')}`
             };
+            
+            console.log('🔍 Photo metadata being sent to backend:', photoMetadata);
+            console.log('📸 Photo data format:', photoData.substring(0, 50) + '...');
+
+            // Create request body matching backend expectations
+            const requestBody = {
+                photoData: photoData, // Full data:image/jpeg;base64,... format
+                metadata: photoMetadata,
+                // Add file information that backend expects
+                fileName: file.name,
+                fileSize: file.size,
+                mimeType: file.type
+            };
+
+            // Use makeRequest for consistent JSON handling
+            const response = await this.makeRequest<{
+                success: boolean;
+                message: string;
+                photo_url: string;
+                photo_id: string;
+                file_path?: string;
+                filename?: string;
+                size_bytes?: number;
+            }>(`/api/twins/${twinId}/upload-photo-with-metadata`, {
+                method: 'POST',
+                body: JSON.stringify(requestBody),
+            });
+
+            if (response.success) {
+                console.log('✅ Photo uploaded successfully:', response.data);
+            } else {
+                console.error('❌ Photo upload failed:', response.error);
+            }
+            
+            return response;
         } catch (error) {
             console.error('❌ Error uploading photo:', error);
             return {
@@ -719,6 +993,41 @@ class TwinApiService {
     }
 
     /**
+     * Update family photo metadata
+     */
+    async updateFamilyPhoto(twinId: string, photoId: string, metadata: {
+        description?: string;
+        date_taken?: string;
+        location?: string;
+        country?: string;
+        place?: string;
+        people_in_photo?: string;
+        category?: string;
+        tags?: string;
+        event_type?: string;
+        // CAMPOS ADICIONALES para completar la información
+        filename?: string;
+        file_size?: number;
+        uploaded_at?: string;
+        photo_url?: string;
+        photo_id?: string;
+    }): Promise<ApiResponse<{
+        success: boolean;
+        message: string;
+        photo: any;
+    }>> {
+        console.log('🔄 Updating family photo:', photoId, 'with complete metadata:', metadata);
+        
+        return this.makeRequest(`/api/twins/${twinId}/photos/${photoId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(metadata)
+        });
+    }
+
+    /**
      * Get family photo proxy URL for direct serving from backend
      */
     getFamilyPhotoProxyUrl(twinId: string, photoId: string): string {
@@ -732,32 +1041,34 @@ class TwinApiService {
     /**
      * Get all contacts for a twin
      */
-    async getContacts(twinId: string): Promise<ApiResponse<ContactResponse[]>> {
-        return this.makeRequest<ContactResponse[]>(`/api/twins/${twinId}/contacts`);
+    async getContacts(twinId: string): Promise<ApiResponse<Contact[]>> {
+        return this.makeRequest<Contact[]>(`/api/twins/${twinId}/contacts`);
     }
 
     /**
      * Create a new contact for a twin
      */
-    async createContact(twinId: string, contactData: ContactData): Promise<ApiResponse<ContactResponse>> {
-        // Map frontend fields (English) to backend fields (Spanish)
+    async createContact(twinId: string, contactData: ContactData): Promise<ApiResponse<Contact>> {
+        // Use the new structure directly (fields already match C# backend)
         const backendData = {
-            nombre: contactData.first_name,
-            apellido: contactData.last_name,
-            apodo: contactData.nickname || '',
-            telefono_movil: contactData.phone_mobile || '',
-            telefono_trabajo: contactData.phone_work || '',
-            telefono_casa: contactData.phone_home || '',
-            email: contactData.email || '',
-            direccion: contactData.address || '',
-            empresa: contactData.company || '',
-            posicion: contactData.position || '',
-            relacion: contactData.relationship,
-            cumpleanos: contactData.birthday || '',
-            notas: contactData.notes || ''
+            TwinID: twinId,
+            Nombre: contactData.Nombre,
+            Apellido: contactData.Apellido,
+            Apodo: contactData.Apodo || '',
+            TelefonoMovil: contactData.TelefonoMovil || '',
+            TelefonoTrabajo: contactData.TelefonoTrabajo || '',
+            TelefonoCasa: contactData.TelefonoCasa || '',
+            Email: contactData.Email || '',
+            Direccion: contactData.Direccion || '',
+            Empresa: contactData.Empresa || '',
+            Cargo: contactData.Cargo || '',
+            Relacion: contactData.Relacion,
+            Cumpleanos: contactData.Cumpleanos || '',
+            Notas: contactData.Notas || '',
+            Type: contactData.Type || 'contact'
         };
 
-        return this.makeRequest<ContactResponse>(`/api/twins/${twinId}/contacts`, {
+        return this.makeRequest<Contact>(`/api/twins/${twinId}/contacts`, {
             method: 'POST',
             body: JSON.stringify(backendData)
         });
@@ -766,25 +1077,28 @@ class TwinApiService {
     /**
      * Update an existing contact
      */
-    async updateContact(twinId: string, contactId: string, contactData: ContactData): Promise<ApiResponse<ContactResponse>> {
-        // Map frontend fields (English) to backend fields (Spanish)
+    async updateContact(twinId: string, contactId: string, contactData: ContactData): Promise<ApiResponse<Contact>> {
+        // Use the new structure directly (fields already match C# backend)
         const backendData = {
-            nombre: contactData.first_name,
-            apellido: contactData.last_name,
-            apodo: contactData.nickname || '',
-            telefono_movil: contactData.phone_mobile || '',
-            telefono_trabajo: contactData.phone_work || '',
-            telefono_casa: contactData.phone_home || '',
-            email: contactData.email || '',
-            direccion: contactData.address || '',
-            empresa: contactData.company || '',
-            posicion: contactData.position || '',
-            relacion: contactData.relationship,
-            cumpleanos: contactData.birthday || '',
-            notas: contactData.notes || ''
+            Id: contactId,
+            TwinID: twinId,
+            Nombre: contactData.Nombre,
+            Apellido: contactData.Apellido,
+            Apodo: contactData.Apodo || '',
+            TelefonoMovil: contactData.TelefonoMovil || '',
+            TelefonoTrabajo: contactData.TelefonoTrabajo || '',
+            TelefonoCasa: contactData.TelefonoCasa || '',
+            Email: contactData.Email || '',
+            Direccion: contactData.Direccion || '',
+            Empresa: contactData.Empresa || '',
+            Cargo: contactData.Cargo || '',
+            Relacion: contactData.Relacion,
+            Cumpleanos: contactData.Cumpleanos || '',
+            Notas: contactData.Notas || '',
+            Type: contactData.Type || 'contact'
         };
 
-        return this.makeRequest<ContactResponse>(`/api/twins/${twinId}/contacts/${contactId}`, {
+        return this.makeRequest<Contact>(`/api/twins/${twinId}/contacts/${contactId}`, {
             method: 'PUT',
             body: JSON.stringify(backendData)
         });
@@ -802,35 +1116,562 @@ class TwinApiService {
     /**
      * Get a specific contact by ID
      */
-    async getContactById(twinId: string, contactId: string): Promise<ApiResponse<ContactResponse>> {
-        return this.makeRequest<ContactResponse>(`/api/twins/${twinId}/contacts/${contactId}`);
+    async getContactById(twinId: string, contactId: string): Promise<ApiResponse<Contact>> {
+        return this.makeRequest<Contact>(`/api/twins/${twinId}/contacts/${contactId}`);
     }
 
     /**
      * Search contacts by query (name, email, company, etc.)
      */
-    async searchContacts(twinId: string, query: string, relationship?: string): Promise<ApiResponse<ContactResponse[]>> {
+    async searchContacts(twinId: string, query: string, relationship?: string): Promise<ApiResponse<Contact[]>> {
         const params = new URLSearchParams();
         params.append('q', query);
         if (relationship && relationship !== 'todos') {
             params.append('relationship', relationship);
         }
         
-        return this.makeRequest<ContactResponse[]>(`/api/twins/${twinId}/contacts/search?${params.toString()}`);
+        return this.makeRequest<Contact[]>(`/api/twins/${twinId}/contacts/search?${params.toString()}`);
     }
 
     /**
      * Get contacts by relationship type
      */
-    async getContactsByRelationship(twinId: string, relationship: string): Promise<ApiResponse<ContactResponse[]>> {
-        return this.makeRequest<ContactResponse[]>(`/api/twins/${twinId}/contacts?relationship=${relationship}`);
+    async getContactsByRelationship(twinId: string, relationship: string): Promise<ApiResponse<Contact[]>> {
+        return this.makeRequest<Contact[]>(`/api/twins/${twinId}/contacts?relationship=${relationship}`);
     }
 
     /**
      * Get upcoming birthdays for contacts
      */
-    async getUpcomingBirthdays(twinId: string, days: number = 30): Promise<ApiResponse<ContactResponse[]>> {
-        return this.makeRequest<ContactResponse[]>(`/api/twins/${twinId}/contacts/birthdays?days=${days}`);
+    async getUpcomingBirthdays(twinId: string, days: number = 30): Promise<ApiResponse<Contact[]>> {
+        return this.makeRequest<Contact[]>(`/api/twins/${twinId}/contacts/birthdays?days=${days}`);
+    }
+
+    // ===========================================
+    // EDUCATION MANAGEMENT METHODS
+    // ===========================================
+
+    /**
+     * Get all education records for a twin
+     */
+    async getEducation(twinId: string): Promise<ApiResponse<Education[]>> {
+        return this.makeRequest<Education[]>(`/api/twins/${twinId}/education`);
+    }
+
+    /**
+     * Create a new education record for a twin
+     */
+    async createEducation(twinId: string, educationData: EducationData): Promise<ApiResponse<Education>> {
+        console.log('📤 API Service - Creating education for twin:', twinId);
+        console.log('📤 API Service - Education data received:', educationData);
+        
+        // Map to exact .NET backend property names (PascalCase)
+        const backendData = {
+            TwinID: twinId,
+            Institution: (educationData as any).Institution,
+            EducationType: (educationData as any).EducationType,
+            DegreeObtained: (educationData as any).DegreeObtained || '',
+            FieldOfStudy: (educationData as any).FieldOfStudy || '',
+            StartDate: (educationData as any).StartDate,
+            EndDate: (educationData as any).EndDate || '',
+            InProgress: (educationData as any).InProgress,
+            Country: (educationData as any).Country || '',
+            Description: (educationData as any).Description || '',
+            Achievements: (educationData as any).Achievements || '',
+            Gpa: (educationData as any).Gpa || '',
+            Credits: (educationData as any).Credits || 0,
+            Type: (educationData as any).Type || 'education'
+        };
+
+        console.log('📤 API Service - Backend data being sent (.NET PascalCase):', backendData);
+
+        return this.makeRequest<Education>(`/api/twins/${twinId}/education`, {
+            method: 'POST',
+            body: JSON.stringify(backendData)
+        });
+    }
+
+    /**
+     * Update an existing education record
+     */
+    async updateEducation(twinId: string, educationId: string, educationData: EducationData): Promise<ApiResponse<Education>> {
+        // Use the structure directly (fields already match C# backend)
+        const backendData = {
+            Id: educationId,
+            TwinID: twinId,
+            Institucion: educationData.Institucion,
+            TipoEducacion: educationData.TipoEducacion,
+            TituloObtenido: educationData.TituloObtenido || '',
+            CampoEstudio: educationData.CampoEstudio || '',
+            FechaInicio: educationData.FechaInicio,
+            FechaFin: educationData.FechaFin || '',
+            EnProgreso: educationData.EnProgreso,
+            Pais: educationData.Pais || '',
+            Descripcion: educationData.Descripcion || '',
+            LogrosDestacados: educationData.LogrosDestacados || '',
+            Promedio: educationData.Promedio || '',
+            Creditos: educationData.Creditos || 0,
+            Type: educationData.Type || 'education'
+        };
+
+        return this.makeRequest<Education>(`/api/twins/${twinId}/education/${educationId}`, {
+            method: 'PUT',
+            body: JSON.stringify(backendData)
+        });
+    }
+
+    /**
+     * Delete an education record
+     */
+    async deleteEducation(twinId: string, educationId: string): Promise<ApiResponse<void>> {
+        return this.makeRequest<void>(`/api/twins/${twinId}/education/${educationId}`, {
+            method: 'DELETE'
+        });
+    }
+
+    /**
+     * Get a specific education record by ID
+     */
+    async getEducationById(twinId: string, educationId: string): Promise<ApiResponse<Education>> {
+        return this.makeRequest<Education>(`/api/twins/${twinId}/education/${educationId}`);
+    }
+
+    /**
+     * Search education records by query (institution, field of study, etc.)
+     */
+    async searchEducation(twinId: string, query: string, educationType?: string): Promise<ApiResponse<Education[]>> {
+        const params = new URLSearchParams();
+        params.append('q', query);
+        if (educationType && educationType !== 'todos') {
+            params.append('type', educationType);
+        }
+        
+        return this.makeRequest<Education[]>(`/api/twins/${twinId}/education/search?${params.toString()}`);
+    }
+
+    /**
+     * Get education records by type
+     */
+    async getEducationByType(twinId: string, educationType: string): Promise<ApiResponse<Education[]>> {
+        return this.makeRequest<Education[]>(`/api/twins/${twinId}/education?type=${educationType}`);
+    }
+
+    // ===========================================
+    // FAMILY MANAGEMENT METHODS
+    // ===========================================
+
+    /**
+     * Get all family members for a twin (actualizada para nueva API)
+     */
+    async getFamilyMembers(twinId: string): Promise<ApiResponse<FamilyMember[]>> {
+        console.log('📤 API Service - Getting family members for twin:', twinId);
+        
+        try {
+            const response = await this.makeRequest<{
+                success: boolean;
+                family: FamilyMember[];
+                twinId: string;
+                count: number;
+            }>(`/api/twins/${twinId}/family`);
+            
+            if (response.success && response.data) {
+                // Mapear los datos del backend al formato esperado por el frontend
+                const familyMembers = response.data.family?.map(member => ({
+                    id: member.id,
+                    twinId: member.twinId,
+                    // Nuevos campos de la API
+                    parentesco: member.parentesco,
+                    nombre: member.nombre,
+                    apellido: member.apellido,
+                    fechaNacimiento: member.fechaNacimiento,
+                    numeroCelular: member.numeroCelular,
+                    email: member.email,
+                    urlFoto: member.urlFoto,
+                    notas: member.notas,
+                    createdDate: member.createdDate,
+                    type: member.type,
+                    // Campos legacy para compatibilidad
+                    firstName: member.nombre, // Mapeo para compatibilidad
+                    lastName: member.apellido,
+                    relationshipType: member.parentesco,
+                    dateOfBirth: member.fechaNacimiento,
+                    phoneNumber: member.numeroCelular,
+                    photoUrl: member.urlFoto,
+                    notes: member.notas,
+                    createdAt: member.createdDate
+                })) || [];
+                
+                return {
+                    success: true,
+                    data: familyMembers,
+                    error: undefined
+                };
+            } else {
+                return {
+                    success: false,
+                    data: undefined,
+                    error: response.error || 'Error al obtener miembros de familia'
+                };
+            }
+        } catch (error) {
+            console.error('❌ Error getting family members:', error);
+            return {
+                success: false,
+                data: undefined,
+                error: 'Error al obtener miembros de familia'
+            };
+        }
+    }
+
+    /**
+     * Create a new family member for a twin (actualizada para nueva API)
+     */
+    async createFamilyMember(twinId: string, familyMemberData: Omit<FamilyMember, 'id' | 'twinId' | 'createdDate' | 'type'>): Promise<ApiResponse<FamilyMember>> {
+        console.log('📤 API Service - Creating family member for twin:', twinId);
+        console.log('📤 API Service - Family member data received:', familyMemberData);
+        
+        // Mapear al formato esperado por la nueva API
+        const apiData = {
+            parentesco: familyMemberData.parentesco || familyMemberData.relationshipType || '',
+            nombre: familyMemberData.nombre || familyMemberData.firstName || '',
+            apellido: familyMemberData.apellido || familyMemberData.lastName || '',
+            fecha_nacimiento: familyMemberData.fechaNacimiento || familyMemberData.dateOfBirth || '',
+            numero_celular: familyMemberData.numeroCelular || familyMemberData.phoneNumber || '',
+            email: familyMemberData.email || '',
+            url_foto: familyMemberData.urlFoto || familyMemberData.photoUrl || '',
+            notas: familyMemberData.notas || familyMemberData.notes || ''
+        };
+
+        console.log('📤 API Service - Data being sent to new API:', apiData);
+
+        try {
+            const response = await this.makeRequest<{
+                success: boolean;
+                family: FamilyMember;
+                message: string;
+            }>(`/api/twins/${twinId}/family`, {
+                method: 'POST',
+                body: JSON.stringify(apiData)
+            });
+            
+            if (response.success && response.data) {
+                // Mapear la respuesta al formato esperado por el frontend
+                const familyMember = response.data.family;
+                const mappedMember: FamilyMember = {
+                    id: familyMember.id,
+                    twinId: familyMember.twinId,
+                    // Nuevos campos
+                    parentesco: familyMember.parentesco,
+                    nombre: familyMember.nombre,
+                    apellido: familyMember.apellido,
+                    fechaNacimiento: familyMember.fechaNacimiento,
+                    numeroCelular: familyMember.numeroCelular,
+                    email: familyMember.email,
+                    urlFoto: familyMember.urlFoto,
+                    notas: familyMember.notas,
+                    createdDate: familyMember.createdDate,
+                    type: familyMember.type,
+                    // Campos legacy para compatibilidad
+                    firstName: familyMember.nombre,
+                    lastName: familyMember.apellido,
+                    relationshipType: familyMember.parentesco,
+                    dateOfBirth: familyMember.fechaNacimiento,
+                    phoneNumber: familyMember.numeroCelular,
+                    photoUrl: familyMember.urlFoto,
+                    notes: familyMember.notas,
+                    createdAt: familyMember.createdDate
+                };
+                
+                return {
+                    success: true,
+                    data: mappedMember,
+                    error: undefined
+                };
+            } else {
+                return {
+                    success: false,
+                    data: undefined,
+                    error: response.error || 'Error al crear miembro de familia'
+                };
+            }
+        } catch (error) {
+            console.error('❌ Error creating family member:', error);
+            return {
+                success: false,
+                data: undefined,
+                error: 'Error al crear miembro de familia'
+            };
+        }
+    }
+
+    /**
+     * Update an existing family member (actualizada para nueva API)
+     */
+    async updateFamilyMember(twinId: string, familyMemberId: string, familyMemberData: Partial<FamilyMember>): Promise<ApiResponse<FamilyMember>> {
+        console.log('📤 API Service - Updating family member:', familyMemberId, 'for twin:', twinId);
+        
+        // Mapear al formato esperado por la nueva API
+        const apiData = {
+            parentesco: familyMemberData.parentesco || familyMemberData.relationshipType || '',
+            nombre: familyMemberData.nombre || familyMemberData.firstName || '',
+            apellido: familyMemberData.apellido || familyMemberData.lastName || '',
+            fecha_nacimiento: familyMemberData.fechaNacimiento || familyMemberData.dateOfBirth || '',
+            numero_celular: familyMemberData.numeroCelular || familyMemberData.phoneNumber || '',
+            email: familyMemberData.email || '',
+            url_foto: familyMemberData.urlFoto || familyMemberData.photoUrl || '',
+            notas: familyMemberData.notas || familyMemberData.notes || ''
+        };
+
+        try {
+            const response = await this.makeRequest<{
+                success: boolean;
+                family: FamilyMember;
+                message: string;
+            }>(`/api/twins/${twinId}/family/${familyMemberId}`, {
+                method: 'PUT',
+                body: JSON.stringify(apiData)
+            });
+            
+            if (response.success && response.data) {
+                // Mapear la respuesta al formato esperado por el frontend
+                const familyMember = response.data.family;
+                const mappedMember: FamilyMember = {
+                    id: familyMember.id,
+                    twinId: familyMember.twinId,
+                    // Nuevos campos
+                    parentesco: familyMember.parentesco,
+                    nombre: familyMember.nombre,
+                    apellido: familyMember.apellido,
+                    fechaNacimiento: familyMember.fechaNacimiento,
+                    numeroCelular: familyMember.numeroCelular,
+                    email: familyMember.email,
+                    urlFoto: familyMember.urlFoto,
+                    notas: familyMember.notas,
+                    createdDate: familyMember.createdDate,
+                    type: familyMember.type,
+                    // Campos legacy para compatibilidad
+                    firstName: familyMember.nombre,
+                    lastName: familyMember.apellido,
+                    relationshipType: familyMember.parentesco,
+                    dateOfBirth: familyMember.fechaNacimiento,
+                    phoneNumber: familyMember.numeroCelular,
+                    photoUrl: familyMember.urlFoto,
+                    notes: familyMember.notas,
+                    createdAt: familyMember.createdDate
+                };
+                
+                return {
+                    success: true,
+                    data: mappedMember,
+                    error: undefined
+                };
+            } else {
+                return {
+                    success: false,
+                    data: undefined,
+                    error: response.error || 'Error al actualizar miembro de familia'
+                };
+            }
+        } catch (error) {
+            console.error('❌ Error updating family member:', error);
+            return {
+                success: false,
+                data: undefined,
+                error: 'Error al actualizar miembro de familia'
+            };
+        }
+    }
+
+    /**
+     * Delete a family member (actualizada para nueva API)
+     */
+    async deleteFamilyMember(twinId: string, familyMemberId: string): Promise<ApiResponse<void>> {
+        console.log('📤 API Service - Deleting family member:', familyMemberId, 'for twin:', twinId);
+        
+        try {
+            const response = await this.makeRequest<{
+                success: boolean;
+                familyId: string;
+                twinId: string;
+                message: string;
+            }>(`/api/twins/${twinId}/family/${familyMemberId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.success) {
+                return {
+                    success: true,
+                    data: undefined,
+                    error: undefined
+                };
+            } else {
+                return {
+                    success: false,
+                    data: undefined,
+                    error: response.error || 'Error al eliminar miembro de familia'
+                };
+            }
+        } catch (error) {
+            console.error('❌ Error deleting family member:', error);
+            return {
+                success: false,
+                data: undefined,
+                error: 'Error al eliminar miembro de familia'
+            };
+        }
+    }
+
+    /**
+     * Get a specific family member by ID (actualizada para nueva API)
+     */
+    async getFamilyMemberById(twinId: string, familyMemberId: string): Promise<ApiResponse<FamilyMember>> {
+        try {
+            const response = await this.makeRequest<{
+                success: boolean;
+                family: FamilyMember;
+                familyId: string;
+                twinId: string;
+            }>(`/api/twins/${twinId}/family/${familyMemberId}`);
+            
+            if (response.success && response.data) {
+                // Mapear la respuesta al formato esperado por el frontend
+                const familyMember = response.data.family;
+                const mappedMember: FamilyMember = {
+                    id: familyMember.id,
+                    twinId: familyMember.twinId,
+                    // Nuevos campos
+                    parentesco: familyMember.parentesco,
+                    nombre: familyMember.nombre,
+                    apellido: familyMember.apellido,
+                    fechaNacimiento: familyMember.fechaNacimiento,
+                    numeroCelular: familyMember.numeroCelular,
+                    email: familyMember.email,
+                    urlFoto: familyMember.urlFoto,
+                    notas: familyMember.notas,
+                    createdDate: familyMember.createdDate,
+                    type: familyMember.type,
+                    // Campos legacy para compatibilidad
+                    firstName: familyMember.nombre,
+                    lastName: familyMember.apellido,
+                    relationshipType: familyMember.parentesco,
+                    dateOfBirth: familyMember.fechaNacimiento,
+                    phoneNumber: familyMember.numeroCelular,
+                    photoUrl: familyMember.urlFoto,
+                    notes: familyMember.notas,
+                    createdAt: familyMember.createdDate
+                };
+                
+                return {
+                    success: true,
+                    data: mappedMember,
+                    error: undefined
+                };
+            } else {
+                return {
+                    success: false,
+                    data: undefined,
+                    error: response.error || 'Error al obtener miembro de familia'
+                };
+            }
+        } catch (error) {
+            console.error('❌ Error getting family member by ID:', error);
+            return {
+                success: false,
+                data: undefined,
+                error: 'Error al obtener miembro de familia'
+            };
+        }
+    }
+
+    /**
+     * Search family members by name or relationship
+     * @deprecated - No disponible en la nueva API, usar getFamilyMembers y filtrar en el frontend
+     */
+    async searchFamilyMembers(twinId: string, query: string, relationshipType?: string): Promise<ApiResponse<FamilyMember[]>> {
+        // Como la nueva API no tiene endpoint de búsqueda, obtenemos todos y filtramos localmente
+        const allMembersResponse = await this.getFamilyMembers(twinId);
+        
+        if (!allMembersResponse.success || !allMembersResponse.data) {
+            return allMembersResponse;
+        }
+        
+        const filteredMembers = allMembersResponse.data.filter(member => {
+            const matchesQuery = query ? 
+                `${member.nombre} ${member.apellido}`.toLowerCase().includes(query.toLowerCase()) ||
+                member.parentesco?.toLowerCase().includes(query.toLowerCase()) :
+                true;
+                
+            const matchesRelationship = relationshipType && relationshipType !== 'todos' ? 
+                member.parentesco === relationshipType : 
+                true;
+                
+            return matchesQuery && matchesRelationship;
+        });
+        
+        return {
+            success: true,
+            data: filteredMembers,
+            error: undefined
+        };
+    }
+
+    /**
+     * Get family members by relationship type
+     * @deprecated - No disponible en la nueva API, usar getFamilyMembers y filtrar en el frontend
+     */
+    async getFamilyMembersByRelationship(twinId: string, relationshipType: string): Promise<ApiResponse<FamilyMember[]>> {
+        // Como la nueva API no tiene filtros por URL, obtenemos todos y filtramos localmente
+        const allMembersResponse = await this.getFamilyMembers(twinId);
+        
+        if (!allMembersResponse.success || !allMembersResponse.data) {
+            return allMembersResponse;
+        }
+        
+        const filteredMembers = allMembersResponse.data.filter(member => 
+            member.parentesco === relationshipType
+        );
+        
+        return {
+            success: true,
+            data: filteredMembers,
+            error: undefined
+        };
+    }
+
+    /**
+     * Upload family member photo
+     */
+    async uploadFamilyMemberPhoto(twinId: string, familyMemberId: string, photoFile: File, fileName?: string): Promise<ApiResponse<{photoUrl: string, fileName: string, filePath: string, familyId: string}>> {
+        console.log('📤 API Service - Uploading photo for family member:', familyMemberId);
+        console.log('📄 File details:', {
+            name: photoFile.name,
+            size: photoFile.size,
+            type: photoFile.type,
+            lastModified: photoFile.lastModified
+        });
+        
+        const formData = new FormData();
+        
+        // Create a new File object with custom filename if provided to ensure proper filename handling
+        const fileToUpload = fileName ? new File([photoFile], fileName, { type: photoFile.type }) : photoFile;
+        
+        // Append the photo file and familyMemberId for backend processing
+        formData.append('photo', fileToUpload);
+        formData.append('familyMemberId', familyMemberId);
+        
+        console.log('📝 FormData contents:');
+        for (let pair of formData.entries()) {
+            console.log(`  ${pair[0]}:`, pair[1]);
+        }
+
+        return this.makeRequest<{photoUrl: string, fileName: string, filePath: string, familyId: string}>(`/api/twins/${twinId}/family/${familyMemberId}/upload-photo`, {
+            method: 'POST',
+            body: formData,
+            // Don't set Content-Type header for FormData - browser will set it automatically with boundary
+            headers: {
+                'X-API-Key': API_KEY
+            }
+        });
     }
 
     /**

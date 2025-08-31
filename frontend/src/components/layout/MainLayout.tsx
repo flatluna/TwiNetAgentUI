@@ -76,10 +76,17 @@ const MainLayout: React.FC = () => {
         }
     }, [msalUser?.localAccountId]); // Reset when user account changes
 
-    // Load Twin profile when user is authenticated
+    // Load Twin profile when user is authenticated (but not on twin-agent page to avoid conflicts)
     useEffect(() => {
         const loadTwinProfile = async () => {
+            // Skip loading on twin-agent page to prevent conflicts
+            if (location.pathname === '/twin-agent') {
+                console.log('🛑 MainLayout: Skipping Twin profile load on twin-agent page to prevent conflicts');
+                return;
+            }
+            
             if (msalUser && !twinProfile && !loadingTwin && !twinLoadAttempted) {
+                console.log('🚀 MainLayout: Iniciando carga única del Twin profile...');
                 setLoadingTwin(true);
                 setTwinLoadAttempted(true); // Set flag to prevent retry loops
                 try {
@@ -89,44 +96,47 @@ const MainLayout: React.FC = () => {
                     // Use localAccountId as the twin identifier
                     const twinId = msalUser.localAccountId;
                     
-                    console.log('🔍 Available claims for debugging:', claims);
-                    console.log('🆔 Using localAccountId as twinId:', twinId);
+                    console.log('🔍 MainLayout: Available claims for debugging:', claims);
+                    console.log('🆔 MainLayout: Using localAccountId as twinId:', twinId);
                     
                     if (!twinId || twinId.trim() === '') {
-                        console.error('❌ No localAccountId found in user');
+                        console.error('❌ MainLayout: No localAccountId found in user');
                         setLoadingTwin(false);
                         return;
                     }
                     
-                    console.log('🔍 Loading Twin profile for twinId:', twinId);
+                    console.log('🔍 MainLayout: Loading Twin profile for twinId:', twinId);
                     
                     // Use smart lookup that automatically determines if it's UUID or name
                     const result = await twinApiService.getTwinByIdentifier(twinId);
                     if (result.success && result.data) {
-                        console.log('✅ Twin profile loaded:', result.data);
+                        console.log('✅ MainLayout: Twin profile loaded:', result.data);
                         setTwinProfile(result.data);
                     } else {
-                        console.log('ℹ️ Twin profile not found or error:', result.error);
+                        console.log('ℹ️ MainLayout: Twin profile not found or error:', result.error);
                         // Try to create Twin from claims if it doesn't exist
-                        console.log('🚀 Attempting to create Twin from user claims...');
+                        console.log('🚀 MainLayout: Attempting to create Twin from user claims...');
                         const createResult = await twinApiService.getOrCreateTwinFromClaims(msalUser);
                         if (createResult.success && createResult.data) {
-                            console.log('✅ Twin created/loaded successfully:', createResult.data);
+                            console.log('✅ MainLayout: Twin created/loaded successfully:', createResult.data);
                             setTwinProfile(createResult.data);
                         } else {
-                            console.error('❌ Failed to create/load Twin:', createResult.error);
+                            console.error('❌ MainLayout: Failed to create/load Twin:', createResult.error);
                         }
                     }
                 } catch (error) {
-                    console.error('❌ Error loading Twin profile:', error);
+                    console.error('❌ MainLayout: Error loading Twin profile:', error);
                 } finally {
                     setLoadingTwin(false);
+                    console.log('🏁 MainLayout: Carga del Twin profile completada');
                 }
+            } else if (twinLoadAttempted) {
+                console.log('🛑 MainLayout: Carga del Twin profile ya fue intentada, evitando loop');
             }
         };
 
         loadTwinProfile();
-    }, [msalUser]); // Simplified dependencies - only depend on msalUser changes
+    }, [msalUser?.localAccountId, location.pathname]); // Add location.pathname to handle route changes
 
     // Manual refresh Twin profile
     const refreshTwinProfile = async () => {
