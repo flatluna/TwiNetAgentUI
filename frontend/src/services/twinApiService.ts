@@ -47,6 +47,157 @@ export interface FamilyMember {
     emergencyContact?: boolean; // @deprecated - no usado en nueva API
 }
 
+// Interface for Resume/CV data
+export interface ResumeData {
+    fileName: string;
+    filePath: string;
+    fileSize: number;
+    uploadDate: string;
+    lastModified: string;
+    contentType: string;
+    isActive?: boolean;
+    downloadUrl?: string;
+}
+
+// Enhanced interfaces for processed resume data
+export interface ResumePersonalInfo {
+    fullName: string;
+    email: string;
+    phoneNumber: string;
+    currentPosition: string;
+}
+
+export interface ResumeStats {
+    workExperience: number;
+    education: number;
+    skills: number;
+    certifications: number;
+    projects: number;
+    awards: number;
+}
+
+export interface ResumeStatus {
+    isComplete: boolean;
+    hasWorkExperience: boolean;
+    hasEducation: boolean;
+    hasSkills: boolean;
+    hasCertifications: boolean;
+}
+
+// Enhanced Resume File interface with AI processing data
+export interface ResumeFile {
+    // Nuevos campos del formato GetResumesFormatted
+    id: string;
+    TwinID: string;
+    documentType: string;
+    fileName: string;
+    filePath: string;
+    containerName: string;
+    sasUrl: string;
+    fileUrl: string;
+    processedAt: string;
+    createdAt: string;
+    success: boolean;
+    
+    // Información personal directa
+    fullName: string;
+    email: string;
+    phoneNumber: string;
+    address?: string;
+    linkedin?: string;
+    
+    // Estadísticas
+    totalWorkExperience: number;
+    currentJobTitle: string;
+    currentCompany: string;
+    totalEducation: number;
+    highestDegree: string;
+    lastInstitution: string;
+    totalSkills: number;
+    skillsList: string[];
+    totalCertifications: number;
+    totalProjects: number;
+    totalAwards: number;
+    hasSalaryInfo: boolean;
+    hasBenefitsInfo: boolean;
+    totalAssociations: number;
+    
+    // Resúmenes
+    summary: string;
+    executiveSummary: string;
+    type: string;
+    
+    // Datos detallados estructurados
+    resumeData: {
+        executive_summary: string;
+        personal_information: {
+            full_name: string;
+            address: string;
+            phone_number: string;
+            email: string;
+            linkedin: string;
+        };
+        summary: string;
+        skills: string[];
+        education: Array<{
+            degree: string;
+            institution: string;
+            graduation_year: number;
+            location: string;
+        }>;
+        work_experience: Array<{
+            job_title: string;
+            company: string;
+            duration: string;
+            responsibilities: string[];
+        }>;
+        salaries: any[];
+        benefits: any[];
+        certifications: Array<{
+            title: string;
+            issuing_organization: string;
+            date_issued: string;
+        }>;
+        projects: any[];
+        awards: Array<{
+            title: string;
+            organization: string;
+            year: number;
+        }>;
+        professional_associations: any[];
+    };
+    
+    // Campos legacy para compatibilidad (deprecated)
+    documentId?: string;
+    uploadedAt?: string;
+    daysAgo?: number;
+    personalInfo?: ResumePersonalInfo;
+    professionalSummary?: string;
+    stats?: ResumeStats;
+    topSkills?: string[];
+    status?: ResumeStatus;
+    fullResumeData?: any;
+    fileSize?: number;
+    uploadTime?: string;
+    lastModified?: string;
+    contentType?: string;
+    isActive?: boolean;
+    fileExtension?: string;
+    displayName?: string;
+}
+
+// Enhanced Resume List Response
+export interface ResumeListResponse {
+    success: boolean;
+    message: string;
+    twinId: string;
+    totalResumes: number;
+    resumes: ResumeFile[];
+    activeResume?: ResumeFile;
+    // Legacy field for compatibility
+    totalCount?: number;
+}
+
 export interface TwinProfileData {
     twinId?: string; // Add twinId field for backend compatibility
     twinName: string;
@@ -1736,6 +1887,87 @@ class TwinApiService {
                 'X-API-Key': API_KEY
             }
         });
+    }
+
+    /**
+     * Get list of all resumes for a twin
+     */
+    async getResumeList(twinId: string): Promise<ApiResponse<ResumeListResponse>> {
+        console.log('📋 API Service - Getting resume list for twin:', twinId);
+        
+        return this.makeRequest<ResumeListResponse>(`/api/twins/${twinId}/work/resumes`, {
+            method: 'GET',
+            headers: {
+                'X-API-Key': API_KEY
+            }
+        });
+    }
+
+    /**
+     * Set active resume for a twin
+     */
+    async setActiveResume(twinId: string, fileName: string): Promise<ApiResponse<{
+        message: string,
+        activeResume: ResumeFile
+    }>> {
+        console.log('🎯 API Service - Setting active resume for twin:', twinId, 'fileName:', fileName);
+        
+        return this.makeRequest<{
+            message: string,
+            activeResume: ResumeFile
+        }>(`/api/twins/${twinId}/work/active-resume`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': API_KEY
+            },
+            body: JSON.stringify({ fileName })
+        });
+    }
+
+    /**
+     * Delete a resume file
+     */
+    async deleteResume(twinId: string, fileName: string): Promise<ApiResponse<{
+        message: string,
+        deletedFile: string
+    }>> {
+        console.log('🗑️ API Service - Deleting resume for twin:', twinId, 'fileName:', fileName);
+        
+        return this.makeRequest<{
+            message: string,
+            deletedFile: string
+        }>(`/api/twins/${twinId}/work/resume/${encodeURIComponent(fileName)}`, {
+            method: 'DELETE',
+            headers: {
+                'X-API-Key': API_KEY
+            }
+        });
+    }
+
+    /**
+     * Download/view a resume file
+     */
+    async getResumeFile(twinId: string, fileName: string): Promise<ApiResponse<Blob>> {
+        console.log('📥 API Service - Getting resume file for twin:', twinId, 'fileName:', fileName);
+        
+        const response = await fetch(`${API_BASE_URL}/api/twins/${twinId}/work/resume/${encodeURIComponent(fileName)}`, {
+            method: 'GET',
+            headers: {
+                'X-API-Key': API_KEY
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        return {
+            success: true,
+            data: blob,
+            error: undefined
+        };
     }
 
     /**
