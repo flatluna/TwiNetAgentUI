@@ -68,13 +68,52 @@ const CarreraProfesionalPage: React.FC = () => {
                 // Handle new enhanced response structure
                 const resumeData = response.data;
                 
-                // Check if we have the new format
+                // Check if we have the new format with nested resume data
                 if (resumeData.resumes && resumeData.totalResumes !== undefined) {
                     console.log('✅ Nueva estructura de CVs recibida:', resumeData.totalResumes, 'CVs procesados');
-                    setResumeList(resumeData.resumes || []);
+                    
+                    // Process the resumes to extract the nested resume data
+                    const processedResumes = resumeData.resumes.map((item: any, index: number) => {
+                        // Extract the actual resume data from the nested structure
+                        const resumeInfo = item.resume || item;
+                        
+                        return {
+                            // Keep original structure for compatibility
+                            ...item,
+                            // Preserve SasUrl fields from different possible locations
+                            sasUrl: item.sasUrl || item.SasUrl || item.doc?.SasUrl,
+                            // Add extracted personal information for card display
+                            personalInfo: resumeInfo.personal_information ? {
+                                fullName: resumeInfo.personal_information.full_name,
+                                email: resumeInfo.personal_information.email,
+                                phone: resumeInfo.personal_information.phone_number,
+                                address: resumeInfo.personal_information.address,
+                                linkedin: resumeInfo.personal_information.linkedin
+                            } : null,
+                            // Add extracted work experience summary
+                            currentJobTitle: resumeInfo.work_experience && resumeInfo.work_experience.length > 0 
+                                ? resumeInfo.work_experience[0].job_title 
+                                : null,
+                            // Add stats for display
+                            stats: {
+                                workExperience: resumeInfo.work_experience ? resumeInfo.work_experience.length : 0,
+                                education: resumeInfo.education ? resumeInfo.education.length : 0,
+                                skills: resumeInfo.skills ? resumeInfo.skills.length : 0
+                            },
+                            // Keep the nested resume data for modal
+                            resumeData: resumeInfo,
+                            // Generate an ID if missing
+                            id: item.id || `resume-${index}`,
+                            fileName: item.fileName || resumeInfo.personal_information?.full_name || `CV-${index + 1}`,
+                            // Status processing
+                            status: { isComplete: true } // Assume processed if we have data
+                        };
+                    });
+                    
+                    setResumeList(processedResumes);
                     
                     // Find active resume from the list (if any)
-                    const activeResume = resumeData.resumes?.find(resume => resume.isActive) || null;
+                    const activeResume = processedResumes?.find(resume => resume.isActive) || null;
                     setActiveResume(activeResume);
                 } else {
                     // Legacy format support
