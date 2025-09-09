@@ -13,6 +13,13 @@ import ContactosPage from "@/pages/biografia/ContactosPage";
 import EducacionPage from "@/pages/biografia/EducacionPage";
 import FamiliaPage from "@/pages/biografia/FamiliaPage";
 import CarreraProfesionalPage from "@/pages/biografia/CarreraProfesionalPage";
+import OportunidadesEmpleoPage from "@/pages/biografia/OportunidadesEmpleoPage";
+import OportunidadEmpleoDetalle from "@/pages/biografia/OportunidadEmpleoDetalle";
+import EjercicioActividadPage from "@/pages/biografia/EjercicioActividadPage";
+import DiarioAlimentacionPage from "@/pages/biografia/DiarioAlimentacionPage";
+import RecetasSaludablesPage from "@/pages/biografia/RecetasSaludablesPage";
+import LugaresDondeVivoPage from "@/pages/biografia/LugaresDondeVivoPage";
+import CasaDetallesPage from "@/pages/biografia/CasaDetallesPage";
 import ArchivoDetalles from "@/pages/biografia/ArchivoDetalles";
 import TwinAgentArchivoDetalles from "@/pages/TwinAgentArchivoDetalles";
 import AdvancedCSVViewer from "@/pages/biografia/AdvancedCSVViewer";
@@ -78,6 +85,34 @@ const router = createBrowserRouter([
             {
                 path: "twin-biografia/carrera-profesional",
                 element: <ProtectedRoute><CarreraProfesionalPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/oportunidades-empleo",
+                element: <ProtectedRoute><OportunidadesEmpleoPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/oportunidades-empleo/:id",
+                element: <ProtectedRoute><OportunidadEmpleoDetalle /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/salud/ejercicio",
+                element: <ProtectedRoute><EjercicioActividadPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/salud/diario-alimentacion",
+                element: <ProtectedRoute><DiarioAlimentacionPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/salud/recetas",
+                element: <ProtectedRoute><RecetasSaludablesPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/lugares",
+                element: <ProtectedRoute><LugaresDondeVivoPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/lugares/:casaId",
+                element: <ProtectedRoute><CasaDetallesPage /></ProtectedRoute>,
             },
             {
                 path: "twin-biografia/archivos-personales/:filename",

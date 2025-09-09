@@ -7,7 +7,7 @@ import { Sun, Moon, Monitor, Settings2 } from "lucide-react";
 const ConfiguracionPage: React.FC = () => {
     const navigate = useNavigate();
     const { theme, setTheme, resolvedTheme } = useTheme();
-    const [apiKey, setApiKey] = useState("AIzaSyCbH7BdKombRuTBAOavP3zX4T8pw5eIVxo");
+    const [apiKey, setApiKey] = useState(import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "");
     const [emailNotifications, setEmailNotifications] = useState(true);
     const [browserNotifications, setBrowserNotifications] = useState(true);
 

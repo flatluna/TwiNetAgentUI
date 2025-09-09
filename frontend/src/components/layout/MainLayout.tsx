@@ -597,7 +597,6 @@ const MainLayout: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="mt-4">
-                                        <h4 className="font-semibold text-gray-800 mb-2 text-sm md:text-base">Todos los Claims (JSON):</h4>
                                         <div className="bg-white p-2 md:p-3 rounded border max-h-48 md:max-h-64 overflow-y-auto">
                                             <pre className="text-xs text-gray-700 whitespace-pre-wrap break-all">
                                                 {JSON.stringify(msalUser.idTokenClaims, null, 2)}

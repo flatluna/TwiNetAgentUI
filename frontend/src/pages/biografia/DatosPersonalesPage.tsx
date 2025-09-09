@@ -190,7 +190,7 @@ const DatosPersonalesPage: React.FC = () => {
     const autocompleteServiceRef = useRef<any>(null);
     const addressInputRef = useRef<HTMLInputElement>(null);
     const autocompleteRef = useRef<any>(null);
-    const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string) || "AIzaSyCbH7BdKombRuTBAOavP3zX4T8pw5eIVxo";
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
     
     // ID del twin que vamos a cargar y editar (usar el del usuario autenticado)
     const TWIN_ID = msalUser?.localAccountId || null;
@@ -313,8 +313,8 @@ const DatosPersonalesPage: React.FC = () => {
             
             // Crear autocomplete
             autocompleteRef.current = new window.google.maps.places.Autocomplete(addressInputRef.current, {
-                types: ['address'],
-                componentRestrictions: {} // Sin restricciones de país para permitir direcciones internacionales
+                types: ['address']
+                // Omitimos componentRestrictions para permitir direcciones internacionales
             });
             
             console.log('✅ Google Places Autocomplete created');

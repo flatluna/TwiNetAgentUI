@@ -16,7 +16,13 @@ import {
     MapPin,
     ChevronRight,
     FolderOpen,
-    Phone
+    Phone,
+    Target,
+    Dumbbell,
+    Apple,
+    BookOpen,
+    ChefHat,
+    Sun
 } from "lucide-react";
 
 const TwinBiografiaPage: React.FC = () => {
@@ -67,6 +73,22 @@ const TwinBiografiaPage: React.FC = () => {
                     icon: FolderOpen,
                     path: "/twin-biografia/archivos-personales",
                     progress: 0
+                },
+                {
+                    id: "mi-salud",
+                    title: "Mi Salud",
+                    description: "Historial médico, citas, medicamentos, bienestar",
+                    icon: Heart,
+                    path: "/twin-biografia/salud",
+                    progress: 0
+                },
+                {
+                    id: "lugares-donde-vivo",
+                    title: "Lugares donde Vivo",
+                    description: "Viviendas actuales y pasadas, mudanzas, detalles de propiedades",
+                    icon: Home,
+                    path: "/twin-biografia/lugares",
+                    progress: 0
                 }
             ]
         },
@@ -89,6 +111,14 @@ const TwinBiografiaPage: React.FC = () => {
                     icon: Briefcase,
                     path: "/twin-biografia/carrera-profesional",
                     progress: 0
+                },
+                {
+                    id: "oportunidades-empleo",
+                    title: "Oportunidades de Empleo",
+                    description: "Gestiona y da seguimiento a las oportunidades laborales que estás considerando",
+                    icon: Target,
+                    path: "/twin-biografia/oportunidades-empleo",
+                    progress: 0
                 }
             ]
         },
@@ -110,6 +140,60 @@ const TwinBiografiaPage: React.FC = () => {
                     description: "Historia de relaciones, matrimonios",
                     icon: Heart,
                     path: "/twin-biografia/relaciones",
+                    progress: 0
+                }
+            ]
+        },
+        {
+            category: "Mi Salud",
+            color: "bg-red-500",
+            items: [
+                {
+                    id: "ejercicio",
+                    title: "Ejercicio y Actividad Física",
+                    description: "Rutinas de ejercicio, deportes, actividad física diaria",
+                    icon: Dumbbell,
+                    path: "/twin-biografia/salud/ejercicio",
+                    progress: 0
+                },
+                {
+                    id: "diario-alimentacion",
+                    title: "Diario de Alimentación",
+                    description: "Registro diario de comidas, hábitos alimenticios",
+                    icon: Apple,
+                    path: "/twin-biografia/salud/diario-alimentacion",
+                    progress: 0
+                },
+                {
+                    id: "recetas",
+                    title: "Recetas Saludables",
+                    description: "Recetas favoritas, comidas saludables, preparaciones especiales",
+                    icon: ChefHat,
+                    path: "/twin-biografia/salud/recetas",
+                    progress: 0
+                },
+                {
+                    id: "bienestar",
+                    title: "Bienestar y Relajación",
+                    description: "Meditación, yoga, técnicas de relajación, mindfulness",
+                    icon: BookOpen,
+                    path: "/twin-biografia/salud/bienestar",
+                    progress: 0
+                },
+                {
+                    id: "habitos-saludables",
+                    title: "Hábitos Saludables",
+                    description: "Rutinas diarias, patrones de sueño, hábitos de hidratación",
+                    icon: Sun,
+                    path: "/twin-biografia/salud/habitos",
+                    progress: 0
+                },
+                {
+                    id: "objetivos-fitness",
+                    title: "Objetivos de Fitness",
+                    description: "Metas de ejercicio, logros deportivos, desafíos personales",
+                    icon: Target,
+                    path: "/twin-biografia/salud/objetivos",
                     progress: 0
                 }
             ]

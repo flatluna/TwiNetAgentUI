@@ -183,7 +183,7 @@ const DatosPersonalesPage: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     
     const autocompleteServiceRef = useRef<any>(null);
-    const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string) || "AIzaSyCbH7BdKombRuTBAOavP3zX4T8pw5eIVxo";
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
     
     // ID del twin que vamos a cargar y editar
     const TWIN_ID = "TestTwin2024";

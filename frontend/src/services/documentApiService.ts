@@ -114,7 +114,7 @@ class DocumentAPIService {
 
     constructor() {
         this.baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:7011';
-        this.apiKey = import.meta.env.VITE_API_KEY || 'B509918774DDE22A5BF94EDB4F145CB6E06F1CBCCC49D492D27FFD4AC3667A71';
+        this.apiKey = import.meta.env.VITE_API_KEY || '';
     }
 
     /**

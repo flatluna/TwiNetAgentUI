@@ -10,7 +10,7 @@ import { getGeocoder } from "@/utils/googleGeocoder";
 type AppMode = "voice" | "twins";
 
 // Google Maps API Key - you should store this in environment variables
-const GOOGLE_MAPS_API_KEY = "AIzaSyBQHEQGBEP5EjBJNOJZQ4l4YlOqYfPGxHs"; // Replace with your actual API key
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
 function App() {
     const [currentMode, setCurrentMode] = useState<AppMode>("voice"); // START WITH VOICE

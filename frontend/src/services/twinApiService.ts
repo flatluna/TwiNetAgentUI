@@ -2,13 +2,13 @@
  * API service for Twin operations
  */
 
-// En desarrollo, usar rutas relativas para aprovechar el proxy de Vite
+// En desarrollo, usar proxy de Vite (rutas relativas /api)
 // En producción, usar la URL completa
 const API_BASE_URL = import.meta.env.DEV 
-    ? 'http://localhost:7011'
+    ? '' // Usar rutas relativas para que Vite proxy las redirija
     : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:7011');
 
-console.log('🔧 API_BASE_URL configured as:', API_BASE_URL);
+console.log('🔧 API_BASE_URL configured as:', API_BASE_URL || 'RELATIVE PATHS (using Vite proxy)');
 console.log('🔧 Development mode:', import.meta.env.DEV);
 
 const API_KEY = import.meta.env.VITE_API_KEY || 'B509918774DDE22A5BF94EDB4F145CB6E06F1CBCCC49D492D27FFD4AC3667A71';

@@ -122,7 +122,7 @@ const ContactosPage: React.FC = () => {
     const autocompleteServiceRef = useRef<any>(null);
 
     // Google Maps API Key
-    const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyBNLrJhOMz6idD0Hipk1y_iddPTWlLqREc';
+    const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
     // Relaciones disponibles
     const relationships = [

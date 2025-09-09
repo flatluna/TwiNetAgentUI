@@ -104,7 +104,7 @@ const ContactosPage: React.FC = () => {
     const autocompleteServiceRef = useRef<any>(null);
 
     // Google Maps API Key
-    const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyBNLrJhOMz6idD0Hipk1y_iddPTWlLqREc';
+    const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
     // Relaciones disponibles
     const relationships = [
@@ -198,8 +198,8 @@ const ContactosPage: React.FC = () => {
             console.log('🔄 Initializing Google Places Autocomplete...');
             
             autocompleteRef.current = new window.google.maps.places.Autocomplete(addressInputRef.current, {
-                types: ['address'],
-                componentRestrictions: {}
+                types: ['address']
+                // Omitimos componentRestrictions para permitir direcciones internacionales
             });
             
             console.log('✅ Google Places Autocomplete created');
