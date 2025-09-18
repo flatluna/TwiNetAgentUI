@@ -243,9 +243,9 @@ const MainLayout: React.FC = () => {
             submenu: [
                 {
                     id: "twin-casa",
-                    label: "Twin del Hogar",
+                    label: "Twin del Hogar", 
                     icon: Home,
-                    path: "/twin-casa"
+                    path: "/mi-patrimonio/twin-hogar"
                 },
                 {
                     id: "twin-vehiculo",

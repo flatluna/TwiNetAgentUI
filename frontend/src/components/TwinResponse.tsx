@@ -24,7 +24,10 @@ export const TwinResponse: React.FC<TwinResponseProps> = ({ response }) => {
           ❌ {response.errorMessage || 'Error procesando la pregunta'}
         </div>
         <div className="error-time">
-          {new Date(response.processedAt || '').toLocaleString()}
+          {response.processedAt ? 
+            new Date(response.processedAt).toLocaleString() : 
+            'Fecha no disponible'
+          }
         </div>
       </div>
     );
@@ -52,7 +55,10 @@ export const TwinResponse: React.FC<TwinResponseProps> = ({ response }) => {
         }}
       />
       <div className="response-time">
-        {new Date(response.processedAt || '').toLocaleString()}
+        {response.processedAt ? 
+          new Date(response.processedAt).toLocaleString() : 
+          'Fecha no disponible'
+        }
       </div>
     </div>
   );

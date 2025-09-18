@@ -11,9 +11,6 @@ import {
     Camera,
     Plane,
     Gift,
-    Coffee,
-    Activity,
-    MapPin,
     ChevronRight,
     FolderOpen,
     Phone,
@@ -22,7 +19,8 @@ import {
     Apple,
     BookOpen,
     ChefHat,
-    Sun
+    Sun,
+    PenTool
 } from "lucide-react";
 
 const TwinBiografiaPage: React.FC = () => {
@@ -123,28 +121,6 @@ const TwinBiografiaPage: React.FC = () => {
             ]
         },
         {
-            category: "Lugares & Vivienda",
-            color: "bg-orange-500",
-            items: [
-                {
-                    id: "lugares-vivido",
-                    title: "Lugares donde he Vivido",
-                    description: "Casas, ciudades, países, mudanzas",
-                    icon: Home,
-                    path: "/twin-biografia/lugares",
-                    progress: 0
-                },
-                {
-                    id: "relaciones",
-                    title: "Relaciones & Parejas",
-                    description: "Historia de relaciones, matrimonios",
-                    icon: Heart,
-                    path: "/twin-biografia/relaciones",
-                    progress: 0
-                }
-            ]
-        },
-        {
             category: "Mi Salud",
             color: "bg-red-500",
             items: [
@@ -203,15 +179,29 @@ const TwinBiografiaPage: React.FC = () => {
     // BLOQUE 2: CRONOLOGÍA DE EVENTOS (Historia día a día)
     const cronologiaEventos = [
         {
+            category: "Historias del Día",
+            color: "bg-indigo-500",
+            items: [
+                {
+                    id: "mi-diario-personal",
+                    title: "📖 Mi Diario Personal",
+                    description: "Registra día a día tus pensamientos, experiencias y memorias cotidianas",
+                    icon: PenTool,
+                    path: "/biografia/diario-personal",
+                    progress: 0
+                }
+            ]
+        },
+        {
             category: "Eventos de Vida",
             color: "bg-purple-500",
             items: [
                 {
                     id: "viajes",
-                    title: "Viajes",
-                    description: "Vacaciones, viajes de trabajo, aventuras",
+                    title: "Viajes y Vacaciones",
+                    description: "Vacaciones, turismo, aventuras y viajes de trabajo",
                     icon: Plane,
-                    path: "/twin-biografia/eventos/viajes",
+                    path: "/twin-biografia/viajes-vacaciones",
                     progress: 0
                 },
                 {
@@ -228,36 +218,6 @@ const TwinBiografiaPage: React.FC = () => {
                     description: "Conferencias, reuniones importantes, logros",
                     icon: Briefcase,
                     path: "/twin-biografia/eventos/trabajo",
-                    progress: 0
-                }
-            ]
-        },
-        {
-            category: "Eventos Casuales",
-            color: "bg-teal-500",
-            items: [
-                {
-                    id: "actividades-diarias",
-                    title: "Actividades Diarias",
-                    description: "Rutinas, hobbies, ejercicio",
-                    icon: Activity,
-                    path: "/twin-biografia/eventos/diarias",
-                    progress: 0
-                },
-                {
-                    id: "eventos-sociales",
-                    title: "Eventos Sociales",
-                    description: "Salidas con amigos, fiestas, reuniones",
-                    icon: Coffee,
-                    path: "/twin-biografia/eventos/sociales",
-                    progress: 0
-                },
-                {
-                    id: "momentos-especiales",
-                    title: "Momentos Especiales",
-                    description: "Comprar mascota, pasear perrito, ir a misa",
-                    icon: MapPin,
-                    path: "/twin-biografia/eventos/especiales",
                     progress: 0
                 }
             ]

@@ -1,0 +1,26 @@
+{
+  "id": "1726001234567",
+  "titulo": "Viaje de Negocios a Austin",
+  "descripcion": "Reunión con socios estratégicos y conferencia de tecnología",
+  "ciudadOrigen": "New York",
+  "paisOrigen": "Estados Unidos",
+  "ciudadDestino": "Austin",
+  "paisDestino": "Estados Unidos",
+  "fechaInicio": "2025-09-15",
+  "fechaFin": "2025-09-18",
+  "medioTransporte": "avion",
+  "presupuestoEstimado": 2500.50,
+  "moneda": "USD",
+  "tipoAlojamiento": "hotel",
+  "notas": "Llevar documentos de presentación. Confirmar reunión con cliente el martes.",
+  "twinId": "user123",
+  "viajeId": "viaje456",
+  "documentType": "itinerary",
+  "fechaCreacion": "2025-09-10T21:05:15.123Z",
+  "fechaActualizacion": "2025-09-10T21:05:15.123Z",
+  "viajeInfo": {
+    "titulo": "Viajes de Trabajo 2025",
+    "descripcion": "Viajes laborales del año",
+    "tipoViaje": "business"
+  }
+}

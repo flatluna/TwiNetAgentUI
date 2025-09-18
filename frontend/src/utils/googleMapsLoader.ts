@@ -72,6 +72,8 @@ class GoogleMapsLoader {
         this.isLoading = true;
         this.loadPromise = new Promise((resolve, reject) => {
             console.log("[DEBUG] Loading Google Maps API script...");
+            console.log(`[DEBUG] API Key: ${this.apiKey.substring(0, 10)}...`);
+            console.log(`[DEBUG] Libraries: ${this.libraries.join(",")}`);
 
             const script = document.createElement("script");
             script.src = `https://maps.googleapis.com/maps/api/js?key=${this.apiKey}&libraries=${this.libraries.join(",")}&v=${this.version}`;
@@ -80,15 +82,29 @@ class GoogleMapsLoader {
 
             script.onload = () => {
                 console.log("[DEBUG] Google Maps API script loaded successfully");
-                this.isLoaded = true;
-                this.isLoading = false;
-                resolve();
+                
+                // Additional check for API errors
+                if (window.google && window.google.maps) {
+                    console.log("[DEBUG] Google Maps object available");
+                    this.isLoaded = true;
+                    this.isLoading = false;
+                    resolve();
+                } else {
+                    console.error("[DEBUG] Google Maps object not available after script load");
+                    this.isLoading = false;
+                    reject(new Error("Google Maps object not available after script load"));
+                }
             };
 
             script.onerror = error => {
                 console.error("[DEBUG] Failed to load Google Maps API script:", error);
+                console.error("[DEBUG] This usually means:");
+                console.error("  1. Invalid API Key");
+                console.error("  2. API Key not enabled for this domain");
+                console.error("  3. Places API not enabled for this project");
+                console.error("  4. Billing not set up for Google Cloud project");
                 this.isLoading = false;
-                reject(new Error("Failed to load Google Maps API"));
+                reject(new Error(`Failed to load Google Maps API: ${error}`));
             };
 
             document.head.appendChild(script);

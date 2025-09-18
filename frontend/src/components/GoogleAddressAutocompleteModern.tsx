@@ -17,6 +17,8 @@ interface GoogleAddressAutocompleteProps {
         estado: string;
         codigoPostal: string;
         pais: string;
+        telefono?: string;
+        website?: string;
         latitud?: number;
         longitud?: number;
     }) => void;
@@ -43,15 +45,16 @@ const GoogleAddressAutocompleteModern: React.FC<GoogleAddressAutocompleteProps> 
                 
                 // Check if API key is properly configured
                 if (!apiKey || apiKey === 'your-google-maps-api-key-here') {
-                    console.warn('⚠️ Google Maps API key not configured. Please add VITE_GOOGLE_MAPS_API_KEY to .env.local');
+                    console.warn('⚠️ Google Maps API key not configured. Please add VITE_GOOGLE_MAPS_API_KEY to .env');
                     setHasApiKey(false);
                     setIsLoading(false);
                     return;
                 }
 
+                console.log('🔑 Google Maps API Key found:', apiKey.substring(0, 10) + '...');
                 setHasApiKey(true);
 
-                // Load Google Maps API
+                // Load Google Maps API with error handling
                 const loader = GoogleMapsLoader.getInstance({
                     apiKey,
                     libraries: ['places']
@@ -61,6 +64,11 @@ const GoogleAddressAutocompleteModern: React.FC<GoogleAddressAutocompleteProps> 
 
                 if (inputRef.current && window.google && window.google.maps && window.google.maps.places) {
                     console.log('🗺️ Initializing Google Places Autocomplete...');
+
+                    // Check for Google Maps API errors
+                    if (window.google.maps.places.PlacesServiceStatus) {
+                        console.log('✅ Places API loaded successfully');
+                    }
 
                     // Try to use the new PlaceAutocompleteElement first (recommended)
                     if (window.google.maps.places.PlaceAutocompleteElement) {
@@ -77,10 +85,12 @@ const GoogleAddressAutocompleteModern: React.FC<GoogleAddressAutocompleteProps> 
                 } else {
                     console.error('❌ Google Maps Places API not available');
                     setIsLoading(false);
+                    setHasApiKey(false);
                 }
             } catch (error) {
                 console.error('❌ Error initializing Google Autocomplete:', error);
                 setIsLoading(false);
+                setHasApiKey(false);
             }
         };
 
@@ -98,13 +108,15 @@ const GoogleAddressAutocompleteModern: React.FC<GoogleAddressAutocompleteProps> 
                 autocompleteRef.current = new window.google.maps.places.Autocomplete(
                     inputRef.current,
                     {
-                        types: ['address'],
+                        types: ['geocode'], // 'geocode' permite direcciones + algunos negocios
                         componentRestrictions: { country: ['us', 'mx', 'ca'] },
                         fields: [
                             'address_components',
                             'formatted_address',
                             'geometry.location',
-                            'name'
+                            'name',
+                            'formatted_phone_number', // 📞 Campo de teléfono (cuando disponible)
+                            'website' // 🌐 Campo de website (cuando disponible)
                         ]
                     }
                 );
@@ -166,11 +178,15 @@ const GoogleAddressAutocompleteModern: React.FC<GoogleAddressAutocompleteProps> 
                         estado,
                         codigoPostal,
                         pais,
+                        telefono: place.formatted_phone_number || '', // 📞 Puede estar vacío para direcciones residenciales
+                        website: place.website || '', // 🌐 Puede estar vacío para direcciones residenciales
                         latitud: location?.lat(),
                         longitud: location?.lng()
                     };
 
                     console.log('📍 Parsed address data:', placeData);
+                    console.log('📞 Phone:', place.formatted_phone_number || 'No disponible');
+                    console.log('🌐 Website:', place.website || 'No disponible');
                     
                     // Update the input value
                     onChange(fullAddress || place.formatted_address || '');
@@ -210,6 +226,34 @@ const GoogleAddressAutocompleteModern: React.FC<GoogleAddressAutocompleteProps> 
                 />
                 <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                     <span className="text-yellow-600 text-xs">⚠️ API Key requerida</span>
+                </div>
+                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
+                    <p><strong>Para habilitar Google Places:</strong></p>
+                    <p>1. Obtén una API Key de Google Cloud Console</p>
+                    <p>2. Habilita Places API</p>
+                    <p>3. Agrega la key como VITE_GOOGLE_MAPS_API_KEY en .env</p>
+                    <button 
+                        onClick={() => {
+                            // Simulate manual address input
+                            const manualAddress = prompt("Ingresa la dirección manualmente:");
+                            if (manualAddress) {
+                                handleInputChange({ target: { value: manualAddress } } as any);
+                                // Simulate a basic place selection
+                                onPlaceSelected({
+                                    direccion: manualAddress,
+                                    ciudad: '',
+                                    estado: '',
+                                    codigoPostal: '',
+                                    pais: '',
+                                    telefono: '',
+                                    website: ''
+                                });
+                            }
+                        }}
+                        className="mt-1 px-2 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
+                    >
+                        📝 Ingresar manualmente
+                    </button>
                 </div>
             </div>
         );

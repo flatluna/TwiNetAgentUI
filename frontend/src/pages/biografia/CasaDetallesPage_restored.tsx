@@ -221,8 +221,8 @@ export default function CasaDetallesPage() {
         try {
             console.log('📸 Cargando fotos de zona:', zona, 'para casa:', casaId);
             
-            // Usar el método correcto: listPhotos(twinId, casaId, zona)
-            const response = await twinApiService.listPhotos(twinId, casaId, zona);
+            const path = `homes/${casaId}/photos/${zona}`;
+            const response = await twinApiService.listPhotos(twinId, path);
             
             if (response.success && response.data) {
                 // Convertir array de objetos a array de URLs

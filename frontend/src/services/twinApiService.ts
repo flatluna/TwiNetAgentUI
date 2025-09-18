@@ -1976,6 +1976,376 @@ class TwinApiService {
     async testConnection(): Promise<ApiResponse<any>> {
         return this.makeRequest<any>('/api/health');
     }
+
+    /**
+     * Upload photo using simple upload endpoint
+     * This is a NEW function specifically for homes/{photoId}/photos/{zona}
+     */
+    async uploadPhotoSimple(
+        twinId: string, 
+        photoFile: File, 
+        photoId?: string,  // ID de la foto (opcional, se genera automáticamente si no se proporciona)
+        filename?: string,
+        zona?: string      // Zona de la casa (exterior, cocina, etc.)
+    ): Promise<ApiResponse<{
+        success: boolean;
+        message: string;
+        twinId: string;
+        filePath: string;
+        fileName: string;
+        directory: string;
+        photoUrl: string;
+        fileSize: number;
+        processingTimeSeconds: number;
+    }>> {
+        // Generar un nuevo ID si no se proporciona
+        const finalPhotoId = photoId || crypto.randomUUID();
+        // Construir el path incluyendo la zona si se proporciona
+        const path = zona 
+            ? `homes/${finalPhotoId}/photos/${zona}`
+            : `homes/${finalPhotoId}/photos`;
+        
+        console.log('📸 API Service - Uploading photo simple for twin:', twinId, 'path:', path);
+        
+        try {
+            // Create FormData
+            const formData = new FormData();
+            formData.append('photo', photoFile);
+            formData.append('path', path);
+            
+            if (filename) {
+                formData.append('filename', filename);
+            }
+
+            const response = await fetch(`${API_BASE_URL}/api/twins/${twinId}/simple-upload-photo`, {
+                method: 'POST',
+                headers: {
+                    'X-API-Key': API_KEY
+                    // NO agregar Content-Type, el browser lo hace automáticamente para FormData
+                },
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ API Error Response:', errorText);
+                return {
+                    success: false,
+                    data: undefined,
+                    error: `HTTP ${response.status}: ${errorText}`
+                };
+            }
+
+            const responseData = await response.json();
+            console.log('✅ Photo upload successful:', responseData);
+            
+            return {
+                success: true,
+                data: responseData,
+                error: undefined
+            };
+            
+        } catch (error) {
+            console.error('❌ Error uploading photo:', error);
+            return {
+                success: false,
+                data: undefined,
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            };
+        }
+    }
+
+    /**
+     * List photos from a specific path
+     * NEW function to get photos from homes/{photoId}/photos/{zona}
+     * Uses the specific endpoint: /api/twins/{twinId}/photos/path
+     */
+    async listPhotos(
+        twinId: string,
+        photoId: string,
+        zona?: string
+    ): Promise<ApiResponse<{
+        success: boolean;
+        message: string;
+        photos: Array<{
+            fileName: string;
+            filePath: string;
+            photoUrl: string;
+            fileSize: number;
+            lastModified: string;
+            contentType: string;
+            directory: string;
+            createdOn: string;
+            eTag: string;
+            metadata?: any;
+        }>;
+        totalCount: number;
+        totalFilesInPath: number;
+        path: string;
+        containerName: string;
+        recursive: boolean;
+        // Legacy fields for compatibility
+        files?: Array<{
+            fileName: string;
+            filePath: string;
+            photoUrl: string;
+            fileSize: number;
+            lastModified: string;
+        }>;
+        totalFiles?: number;
+        directory?: string;
+    }>> {
+        // Construir el path para listar fotos
+        const path = zona 
+            ? `homes/${photoId}/photos/${zona}`
+            : `homes/${photoId}/photos`;
+        
+        console.log('📋 API Service - Listing photos for twin:', twinId, 'path:', path);
+        
+        try {
+            // Usar el nuevo endpoint específico para photos por path
+            const response = await fetch(`${API_BASE_URL}/api/twins/${twinId}/photos-by-path?path=${encodeURIComponent(path)}`, {
+                method: 'GET',
+                headers: {
+                    'X-API-Key': API_KEY,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ API Error Response:', errorText);
+                return {
+                    success: false,
+                    data: undefined,
+                    error: `HTTP ${response.status}: ${errorText}`
+                };
+            }
+
+            const responseData = await response.json();
+            console.log('✅ Photos list successful:', responseData);
+            
+            // Mapear la respuesta real al formato esperado por el frontend
+            const mappedResponse = {
+                ...responseData,
+                // Mapear photos a files para compatibilidad con el código existente
+                files: responseData.photos || [],
+                totalFiles: responseData.totalCount || responseData.totalFilesInPath || 0,
+                directory: responseData.path || ''
+            };
+            
+            return {
+                success: true,
+                data: mappedResponse,
+                error: undefined
+            };
+            
+        } catch (error) {
+            console.error('❌ Error listing photos:', error);
+            return {
+                success: false,
+                data: undefined,
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            };
+        }
+    }
+
+    /**
+     * Upload a global document for a twin
+     * Uses the new endpoint: POST /api/twins/{twinId}/global-documents
+     */
+    async uploadGlobalDocument(
+        twinId: string,
+        file: File,
+        options?: {
+            path?: string;
+            fileName?: string;
+            documentType?: string;
+            category?: string;
+            description?: string;
+        }
+    ): Promise<ApiResponse<{
+        success: boolean;
+        message: string;
+        twinId: string;
+        filePath: string;
+        fileName: string;
+        directory: string;
+        documentUrl: string;
+        fileSize: number;
+        processingTimeSeconds: number;
+        documentType: string;
+        category: string;
+        description?: string;
+    }>> {
+        console.log('📄 API Service - Uploading global document for twin:', twinId);
+        console.log('📄 File details:', {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            lastModified: file.lastModified
+        });
+        console.log('📄 Upload options:', options);
+        
+        const formData = new FormData();
+        
+        // Archivo obligatorio
+        formData.append('file', file);
+        
+        // Campos opcionales
+        if (options?.path) {
+            formData.append('path', options.path);
+        }
+        if (options?.fileName) {
+            formData.append('fileName', options.fileName);
+        }
+        if (options?.documentType) {
+            formData.append('documentType', options.documentType);
+        }
+        if (options?.category) {
+            formData.append('category', options.category);
+        }
+        if (options?.description) {
+            formData.append('description', options.description);
+        }
+        
+        console.log('📝 FormData contents:');
+        for (let pair of formData.entries()) {
+            console.log(`  ${pair[0]}:`, pair[1]);
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/twins/${twinId}/global-documents`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-API-Key': API_KEY
+                    // No agregar Content-Type para FormData - el browser lo establece automáticamente
+                }
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Document upload error:', errorText);
+                return {
+                    success: false,
+                    data: undefined,
+                    error: `HTTP ${response.status}: ${errorText}`
+                };
+            }
+
+            const responseData = await response.json();
+            console.log('✅ Document upload successful:', responseData);
+            
+            return {
+                success: true,
+                data: responseData,
+                error: undefined
+            };
+            
+        } catch (error) {
+            console.error('❌ Error uploading document:', error);
+            return {
+                success: false,
+                data: undefined,
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            };
+        }
+    }
+
+    /**
+     * Get global documents by category for a twin
+     * Uses the endpoint: GET /api/twins/{twinId}/global-documents/categories
+     */
+    async getGlobalDocumentsByCategory(
+        twinId: string,
+        category: string,
+        limit: number = 50,
+        offset: number = 0
+    ): Promise<ApiResponse<{
+        success: boolean;
+        category: string;
+        totalDocuments: number;
+        documents: Array<{
+            id: string;
+            twinId: string;
+            documentType: string;
+            fileName: string;
+            filePath: string;
+            fullFilePath: string;
+            containerName: string;
+            documentUrl: string;
+            originalDocumentType: string;
+            category: string;
+            description: string;
+            totalPages: number;
+            textContent: string;
+            processedAt: string;
+            createdAt: string;
+            success: boolean;
+            structuredData: {
+                documentType: string;
+                category: string;
+                description: string;
+                executiveSummary: string;
+                pageData: Array<{
+                    pageNumber: number;
+                    content: string;
+                    keyPoints: string[];
+                    entities: {
+                        names: string[];
+                        dates: string[];
+                        amounts: string[];
+                        locations: string[];
+                    };
+                }>;
+                tableData: Array<{
+                    tableNumber: number;
+                    pageNumber: number;
+                    title: string;
+                    headers: string[];
+                    rows: string[][];
+                    summary: string;
+                }>;
+                keyInsights: Array<{
+                    type: string;
+                    title: string;
+                    description: string;
+                    value: string;
+                    importance: string;
+                }>;
+                htmlOutput: string;
+                rawAIResponse: string;
+                processedAt: string;
+            };
+            executiveSummary: string;
+            pageData: any[];
+            tableData: any[];
+            keyInsights: any[];
+            htmlOutput: string;
+            rawAIResponse: string;
+            aiProcessedAt: string;
+            pageCount: number;
+            tableCount: number;
+            insightCount: number;
+            hasExecutiveSummary: boolean;
+            hasHtmlOutput: boolean;
+        }>;
+        limit: number;
+        offset: number;
+        retrievedAt: string;
+    }>> {
+        console.log('📄 API Service - Getting global documents by category for twin:', twinId, 'category:', category);
+        
+        const params = new URLSearchParams();
+        params.append('category', category);
+        params.append('limit', limit.toString());
+        params.append('offset', offset.toString());
+
+        return this.makeRequest(`/api/twins/${twinId}/global-documents/categories?${params.toString()}`, {
+            method: 'GET'
+        });
+    }
 }
 
 // Export singleton instance
