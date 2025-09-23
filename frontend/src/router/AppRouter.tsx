@@ -1,5 +1,5 @@
 import React from "react";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import MainLayout from "@/components/layout/MainLayout";
 import AuthRedirectHandler from "@/components/AuthRedirectHandler";
 import DashboardPage from "@/pages/DashboardPage";
@@ -45,6 +45,18 @@ import CasasPage from "@/pages/CasasPage";
 import CrearCasaPage from "@/pages/CrearCasaPage";
 import EditarCasaPage from "@/pages/EditarCasaPage";
 import DocumentosCasaPage from "@/pages/DocumentosCasaPage";
+import DocumentosVehiculoPage from "@/pages/DocumentosVehiculoPage";
+import VehiculosMainPage from "@/pages/VehiculosMainPage";
+import VehiculoTestPage from "@/pages/VehiculoTestPage";
+import CrearVehiculoPage from "@/pages/CrearVehiculoPage";
+import EditarVehiculoPage from "@/pages/EditarVehiculoPage";
+import VehiculoDetallesPage from "@/pages/VehiculoDetallesPage";
+import MiConocimientoPage from "@/pages/MiConocimientoPage";
+import LibrosPage from "@/pages/LibrosPage";
+import CursosPage from "@/pages/CursosPage";
+import AgregarLibroPage from "@/pages/AgregarLibroPage";
+import EditarLibroPage from "@/pages/EditarLibroPage";
+import BookNotesPage from "@/pages/BookNotesPage";
 import AnalisisAIPage from "@/pages/AnalisisAIPage";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
@@ -75,6 +87,34 @@ const router = createBrowserRouter([
             {
                 path: "twin-biografia",
                 element: <ProtectedRoute><TwinBiografiaPage /></ProtectedRoute>,
+            },
+            {
+                path: "conocimiento",
+                element: <Navigate to="/mi-conocimiento" replace />,
+            },
+            {
+                path: "mi-conocimiento",
+                element: <ProtectedRoute><MiConocimientoPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/libros",
+                element: <ProtectedRoute><LibrosPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/libros/agregar",
+                element: <ProtectedRoute><AgregarLibroPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/libros/:bookId/editar",
+                element: <ProtectedRoute><EditarLibroPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/libros/:bookId/notas",
+                element: <ProtectedRoute><BookNotesPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos",
+                element: <ProtectedRoute><CursosPage /></ProtectedRoute>,
             },
             {
                 path: "twin-biografia/fotos",
@@ -247,6 +287,34 @@ const router = createBrowserRouter([
             {
                 path: "mi-patrimonio/casas/analisis/:homeId",
                 element: <ProtectedRoute><AnalisisAIPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-vehiculo",
+                element: <ProtectedRoute><VehiculosMainPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-vehiculo/test",
+                element: <ProtectedRoute><VehiculoTestPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-vehiculo/:twinId",
+                element: <ProtectedRoute><VehiculosMainPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-vehiculo/crear",
+                element: <ProtectedRoute><CrearVehiculoPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-vehiculo/editar/:carId",
+                element: <ProtectedRoute><EditarVehiculoPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-vehiculo/detalles/:carId",
+                element: <ProtectedRoute><VehiculoDetallesPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-vehiculo/:vehicleId/documentos",
+                element: <ProtectedRoute><DocumentosVehiculoPage /></ProtectedRoute>,
             },
         ],
     },

@@ -620,12 +620,89 @@ export function useAgentCreateHome() {
     }
   }, []);
 
+  // Función para subir documentos de hipoteca
+  const subirHipotecaCasa = useCallback(async (twinId: string, homeId: string, file: File) => {
+    try {
+      console.log('🏠💰 Subiendo hipoteca para casa:', { twinId, homeId, fileName: file.name });
+
+      // Validar que sea un archivo válido (PDF, imagen, etc.)
+      const validFileTypes = [
+        'application/pdf',
+        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
+      
+      if (!validFileTypes.includes(file.type)) {
+        throw new Error(`Archivo no válido: ${file.name}. Solo se permiten PDF, imágenes o documentos de Word.`);
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      console.log('🏠💰 Enviando archivo de hipoteca:', file.name);
+
+      const response = await fetch(`/api/twins/${twinId}/${homeId}/upload-home-mortgage/mortgage`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (response.ok) {
+        const uploadResult = await response.json();
+        console.log('✅ Hipoteca de casa subida exitosamente:', uploadResult);
+        
+        return {
+          Success: true,
+          TwinId: twinId,
+          HomeId: homeId,
+          FileName: file.name,
+          FileUrl: uploadResult.fileUrl || uploadResult.url || uploadResult.filePath,
+          Message: 'Hipoteca de casa subida exitosamente'
+        };
+      } else {
+        const errorData = await response.text();
+        console.error('❌ Error subiendo hipoteca:', response.status, errorData);
+        throw new Error(`Error al subir hipoteca: ${response.status} - ${errorData}`);
+      }
+    } catch (error) {
+      console.error('❌ Error al subir hipoteca de casa:', error);
+      throw error;
+    }
+  }, []);
+
+  // Función para obtener lista de hipotecas
+  const obtenerListaHipotecas = useCallback(async (twinId: string, homeId: string) => {
+    try {
+      console.log('🏠💰 Obteniendo lista de hipotecas:', { twinId, homeId });
+
+      const response = await fetch(`/api/twins/${twinId}/${homeId}/mortgage-list`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const hipotecas = await response.json();
+        console.log('✅ Lista de hipotecas obtenida:', hipotecas);
+        return hipotecas;
+      } else {
+        const errorData = await response.text();
+        console.error('❌ Error obteniendo lista de hipotecas:', response.status, errorData);
+        throw new Error(`Error al obtener hipotecas: ${response.status} - ${errorData}`);
+      }
+    } catch (error) {
+      console.error('❌ Error al obtener lista de hipotecas:', error);
+      throw error;
+    }
+  }, []);
+
   // Función para obtener una casa específica por ID
   const obtenerCasaPorId = useCallback(async (twinId: string, homeId: string): Promise<HomeData> => {
     try {
       console.log('🏠 Obteniendo casa específica:', { twinId, homeId });
 
-      const response = await fetch(`/api/twins/${twinId}/lugares-vivienda/${homeId}`, {
+      const response = await fetch(`/api/twins/${twinId}/homeid/${homeId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -636,7 +713,11 @@ export function useAgentCreateHome() {
         throw new Error(`Error HTTP: ${response.status}`);
       }
 
-      const casa = await response.json();
+      const data = await response.json();
+      console.log('✅ Respuesta del endpoint:', data);
+      
+      // Extraer el objeto home de la respuesta
+      const casa = data.home;
       console.log('✅ Casa obtenida:', casa);
       
       return casa;
@@ -646,7 +727,7 @@ export function useAgentCreateHome() {
     }
   }, []);
 
-  return { crearCasaConIA, obtenerCasas, obtenerCasaPorId, actualizarCasa, subirFotosCasa, subirSeguroCasa };
+  return { crearCasaConIA, obtenerCasas, obtenerCasaPorId, actualizarCasa, subirFotosCasa, subirSeguroCasa, subirHipotecaCasa, obtenerListaHipotecas };
 }
 
 // Exportar instancia del servicio

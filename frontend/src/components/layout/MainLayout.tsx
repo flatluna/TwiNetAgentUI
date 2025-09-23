@@ -15,11 +15,14 @@ import {
     UserPlus,
     Eye,
     BookOpen,
-    MessageCircle,
     User,
     Home,
     Car,
-    Dog
+    Dog,
+    Network,
+    Bot,
+    Brain,
+    GraduationCap
 } from "lucide-react";
 import { LoginButton, LogoutButton } from "@/components/LoginButton";
 import { useMsal } from "@azure/msal-react";
@@ -200,14 +203,29 @@ const MainLayout: React.FC = () => {
                     path: "/twin-biografia"
                 },
                 {
-                    id: "twin-agent",
-                    label: "Chat con Mi Twin",
-                    icon: MessageCircle,
+                    id: "mi-conocimiento",
+                    label: "Mi Conocimiento",
+                    icon: Brain,
+                    path: "/mi-conocimiento"
+                }
+            ]
+        },
+        {
+            id: "twin-agents-net",
+            label: "Twin Agents Net",
+            icon: Network,
+            path: "/twin-agents-net",
+            description: "Red de agentes Twin AI",
+            submenu: [
+                {
+                    id: "chat-mi-twin",
+                    label: "Chat con mi Twin",
+                    icon: Bot,
                     path: "/twin-agent"
                 },
                 {
-                    id: "chat-voice",
-                    label: "Chat por Voz",
+                    id: "chat-voz",
+                    label: "Chat con voz",
                     icon: Mic,
                     path: "/chat-voice"
                 }
@@ -258,12 +276,6 @@ const MainLayout: React.FC = () => {
                     label: "Twins de Mascotas",
                     icon: Dog,
                     path: "/twin-mascotas"
-                },
-                {
-                    id: "crear-twin-patrimonio",
-                    label: "Crear Twin de Patrimonio",
-                    icon: UserPlus,
-                    path: "/crear-twin-objeto"
                 }
             ]
         },
@@ -292,6 +304,7 @@ const MainLayout: React.FC = () => {
         const colors = {
             "dashboard": "text-blue-400 hover:text-blue-300",
             "mi-twin": "text-green-400 hover:text-green-300",
+            "twin-agents-net": "text-cyan-400 hover:text-cyan-300",
             "mi-familia": "text-purple-400 hover:text-purple-300",
             "mi-patrimonio": "text-orange-400 hover:text-orange-300",
             "configuracion": "text-gray-400 hover:text-gray-300"
@@ -304,8 +317,11 @@ const MainLayout: React.FC = () => {
         const colors = {
             // Mi Twin Personal
             "biblioteca-digital": "text-emerald-400 hover:text-emerald-300",
-            "twin-agent": "text-green-300 hover:text-green-200",
-            "chat-voice": "text-teal-400 hover:text-teal-300",
+            "mi-conocimiento": "text-indigo-400 hover:text-indigo-300",
+            
+            // Twin Agents Net
+            "chat-mi-twin": "text-cyan-300 hover:text-cyan-200",
+            "chat-voz": "text-sky-400 hover:text-sky-300",
             
             // Mi Familia
             "crear-twin-familiar": "text-purple-300 hover:text-purple-200",

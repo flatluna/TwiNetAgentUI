@@ -30,7 +30,7 @@ import { Card } from '@/components/ui/card';
 const CasasPage: React.FC = () => {
     const { accounts } = useMsal();
     const navigate = useNavigate();
-    const { obtenerCasas, obtenerCasaPorId, subirFotosCasa } = useAgentCreateHome();
+    const { obtenerCasas, subirFotosCasa } = useAgentCreateHome();
     const [casas, setCasas] = useState<HomeData[]>([]);
     const [tipoActivo, setTipoActivo] = useState<'actual' | 'pasado' | 'mudanza' | 'inversion' | 'vacacional' | 'todos'>('todos');
     const [loading, setLoading] = useState(true);
