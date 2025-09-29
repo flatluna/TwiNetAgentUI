@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useMsal } from '@azure/msal-react';
 
 export interface User {
   twinId: string;
@@ -29,13 +30,33 @@ interface UserProviderProps {
 }
 
 export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
-  // Demo user - using existing Twin ID from the project
-  const [user, setUser] = useState<User | null>({
-    twinId: "TestTwin2024",
-    userName: "Demo Twin Usuario",
-    email: "demo@twinagent.com",
-    isAuthenticated: true
-  });
+  const { accounts } = useMsal();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    // Obtener el TwinID real del usuario autenticado desde MSAL
+    if (accounts && accounts.length > 0) {
+      const msalAccount = accounts[0];
+      const realTwinId = msalAccount.localAccountId;
+      
+      console.log('🔐 Usuario autenticado detectado:', {
+        username: msalAccount.username,
+        name: msalAccount.name,
+        localAccountId: msalAccount.localAccountId,
+        homeAccountId: msalAccount.homeAccountId
+      });
+
+      setUser({
+        twinId: realTwinId, // Usar el TwinID real del usuario autenticado
+        userName: msalAccount.name || msalAccount.username || "Usuario",
+        email: msalAccount.username,
+        isAuthenticated: true
+      });
+    } else {
+      console.log('❌ No hay usuario autenticado');
+      setUser(null);
+    }
+  }, [accounts]);
 
   const logout = () => {
     setUser(null);

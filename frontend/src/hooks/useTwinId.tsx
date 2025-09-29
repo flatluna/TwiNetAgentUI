@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useUser } from '../context/UserContext';
+import { useMsal } from '@azure/msal-react';
 
 interface TwinIdConfig {
   twinId: string | null;
@@ -14,6 +16,8 @@ export const useTwinId = (): TwinIdConfig => {
   const [twinId, setTwinId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useUser();
+  const { accounts } = useMsal();
 
   useEffect(() => {
     const getTwinId = async () => {
@@ -21,59 +25,46 @@ export const useTwinId = (): TwinIdConfig => {
         setLoading(true);
         setError(null);
 
-        // Intentar obtener el twinId de diferentes fuentes
-        // 1. Local Storage (si se guardó previamente)
+        // 1. Obtener directamente desde MSAL accounts (PRIORIDAD MÁXIMA)
+        if (accounts && accounts.length > 0) {
+          const realTwinId = accounts[0].localAccountId;
+          console.log('✅ TwinId obtenido directamente de MSAL:', realTwinId);
+          setTwinId(realTwinId);
+          localStorage.setItem('twinId', realTwinId);
+          setLoading(false);
+          return;
+        }
+
+        // 2. Obtener del contexto de usuario como fallback
+        if (user?.twinId && user.twinId !== 'TestTwin2024') {
+          console.log('✅ TwinId obtenido del contexto de usuario:', user.twinId);
+          setTwinId(user.twinId);
+          localStorage.setItem('twinId', user.twinId);
+          setLoading(false);
+          return;
+        }
+
+        // 3. Local Storage (como último recurso)
         const storedTwinId = localStorage.getItem('twinId');
-        if (storedTwinId) {
+        if (storedTwinId && storedTwinId !== 'TestTwin2024') {
           setTwinId(storedTwinId);
           setLoading(false);
           return;
         }
 
-        // 2. Session Storage
-        const sessionTwinId = sessionStorage.getItem('twinId');
-        if (sessionTwinId) {
-          setTwinId(sessionTwinId);
-          localStorage.setItem('twinId', sessionTwinId);
-          setLoading(false);
-          return;
-        }
-
-        // 3. Obtener desde la API o contexto de autenticación
-        // TODO: Implementar según tu sistema de autenticación
-        // Por ejemplo, desde Microsoft Entra ID o el contexto de usuario
-        // 
-        // Ejemplo de integración:
-        // const userContext = useContext(UserContext);
-        // const authContext = useContext(AuthContext);
-        // if (userContext?.user?.twinId) {
-        //   setTwinId(userContext.user.twinId);
-        //   localStorage.setItem('twinId', userContext.user.twinId);
-        //   return;
-        // }
-        //
-        // O llamada a API:
-        // const response = await fetch('/api/user/twin-id', {
-        //   headers: { Authorization: `Bearer ${authContext.token}` }
-        // });
-        // const { twinId } = await response.json();
-        
-        // 4. Valor por defecto temporal para desarrollo
-        const defaultTwinId = 'default-twin-id';
-        console.warn('⚠️ Usando Twin ID por defecto para desarrollo:', defaultTwinId);
-        setTwinId(defaultTwinId);
-        localStorage.setItem('twinId', defaultTwinId);
+        // 4. Si llegamos aquí, no hay TwinId válido
+        throw new Error('No se encontró un TwinId válido del usuario autenticado');
 
       } catch (err) {
-        console.error('Error al obtener Twin ID:', err);
-        setError('No se pudo obtener el identificador del twin');
+        console.error('❌ Error al obtener Twin ID:', err);
+        setError('No se pudo obtener el identificador del twin del usuario');
       } finally {
         setLoading(false);
       }
     };
 
     getTwinId();
-  }, []);
+  }, [user, accounts]);
 
   return { twinId, loading, error };
 };
@@ -85,20 +76,20 @@ export const useTwinId = (): TwinIdConfig => {
 export const getCurrentTwinId = (): string | null => {
   // Intentar obtener de localStorage primero
   const storedTwinId = localStorage.getItem('twinId');
-  if (storedTwinId) {
+  if (storedTwinId && storedTwinId !== 'default-twin-id') {
     return storedTwinId;
   }
 
   // Fallback a sessionStorage
   const sessionTwinId = sessionStorage.getItem('twinId');
-  if (sessionTwinId) {
+  if (sessionTwinId && sessionTwinId !== 'default-twin-id') {
     localStorage.setItem('twinId', sessionTwinId);
     return sessionTwinId;
   }
 
-  // Valor por defecto para desarrollo
-  console.warn('⚠️ No se encontró Twin ID, usando valor por defecto');
-  return 'default-twin-id';
+  // No usar valores por defecto - devolver null si no hay TwinId real
+  console.warn('⚠️ No se encontró Twin ID válido del usuario');
+  return null;
 };
 
 /**

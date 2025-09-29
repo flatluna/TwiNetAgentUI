@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   GraduationCap, 
   Calendar,
@@ -7,108 +7,214 @@ import {
   ExternalLink,
   Star,
   Plus,
-  Search,
-  Filter,
   BookOpen,
   Building,
-  User
+  Edit,
+  Eye,
+  Loader2,
+  User,
+  RefreshCw,
+  FileText,
+  Brain,
+  Upload,
+  AlertCircle,
+  BookOpenCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Curso, CursoStatus, CursoType } from '@/types/conocimiento';
+import { CursoStatus, CursoType } from '@/types/conocimiento';
+import { useNavigate } from 'react-router-dom';
+import { useTwinId } from '@/hooks/useTwinId';
+import { obtenerCursosDelBackend, obtenerCursosAIDelBackend } from '@/services/courseService';
 
 interface CursosSectionProps {
   searchTerm?: string;
 }
 
+// Interfaz temporal para mapear DetalleCurso a Curso
+interface CursoMapeado {
+  id: string;
+  twinId: string;
+  titulo: string;
+  institucion: string;
+  instructor: string;
+  tipo: CursoType;
+  status: CursoStatus;
+  fechaInicio: string;
+  fechaFin?: string;
+  duracionHoras: number;
+  calificacion?: number;
+  certificado: boolean;
+  urlCertificado?: string;
+  descripcion: string;
+  categorias: string[];
+  prerequisitos: string[];
+  habilidadesAdquiridas: string[];
+  notas?: string;
+  idioma: string;
+  tags: string[];
+  esPublico: boolean;
+  createdAt: string;
+  updatedAt: string;
+  progreso?: number;
+}
+
 const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
-  const [cursos] = useState<Curso[]>([
-    {
-      id: '1',
-      titulo: 'React Avanzado con TypeScript',
-      institucion: 'Platzi',
-      instructor: 'Nicolas Molina',
-      tipo: CursoType.ONLINE,
-      status: CursoStatus.COMPLETADO,
-      fechaInicio: '2024-01-15',
-      fechaFin: '2024-03-15',
-      duracionHoras: 40,
-      calificacion: 4.8,
-      certificado: true,
-      urlCertificado: 'https://platzi.com/certificates/react-typescript',
-      descripcion: 'Curso completo de React con TypeScript, hooks avanzados, patrones de diseño y mejores prácticas.',
-      categorias: ['Frontend', 'JavaScript', 'React'],
-      habilidadesAdquiridas: ['React Hooks', 'TypeScript', 'State Management', 'Testing'],
-      notas: 'Excelente curso para profundizar en React. Los ejercicios prácticos fueron muy útiles.',
-      createdAt: '2024-03-15T10:30:00Z',
-      updatedAt: '2024-03-15T10:30:00Z'
-    },
-    {
-      id: '2',
-      titulo: 'Machine Learning con Python',
-      institucion: 'Coursera - Stanford University',
-      instructor: 'Andrew Ng',
-      tipo: CursoType.ONLINE,
-      status: CursoStatus.EN_PROGRESO,
-      fechaInicio: '2024-09-01',
-      fechaFin: undefined,
-      duracionHoras: 60,
-      progreso: 65,
-      calificacion: 5.0,
-      certificado: false,
-      descripcion: 'Introducción completa al Machine Learning con implementaciones prácticas en Python.',
-      categorias: ['Machine Learning', 'Python', 'Data Science'],
-      habilidadesAdquiridas: ['Supervised Learning', 'Neural Networks', 'Python', 'Scikit-learn'],
-      notas: 'Curso muy completo, Andrew Ng explica los conceptos de manera muy clara.',
-      createdAt: '2024-09-01T09:00:00Z',
-      updatedAt: '2024-09-15T14:20:00Z'
-    },
-    {
-      id: '3',
-      titulo: 'Taller de Liderazgo Ejecutivo',
-      institucion: 'IESE Business School',
-      instructor: 'María García',
-      tipo: CursoType.PRESENCIAL,
-      status: CursoStatus.PLANIFICADO,
-      fechaInicio: '2024-11-01',
-      fechaFin: '2024-11-03',
-      duracionHoras: 24,
-      certificado: true,
-      descripcion: 'Taller intensivo de 3 días sobre liderazgo ejecutivo y gestión de equipos.',
-      categorias: ['Liderazgo', 'Management', 'Soft Skills'],
-      habilidadesAdquiridas: ['Liderazgo', 'Comunicación', 'Gestión de Equipos'],
-      notas: 'Muy recomendado por colegas. Esperando con interés.',
-      createdAt: '2024-09-20T16:45:00Z',
-      updatedAt: '2024-09-20T16:45:00Z'
+  const navigate = useNavigate();
+  const { twinId, loading: twinIdLoading, error: twinIdError } = useTwinId();
+  
+  const [cursos, setCursos] = useState<CursoMapeado[]>([]);
+  const [cursosAI, setCursosAI] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Función para mapear curso del backend a CursoMapeado
+  const mapearCursoBackend = (cursoBackend: any, index: number): CursoMapeado => {
+    // El curso viene dentro de cursoData.curso
+    const detalle = cursoBackend.cursoData?.curso || {};
+    
+    const extraerHoras = (duracion: string): number => {
+      const match = duracion.match(/(\d+)/);
+      return match ? parseInt(match[1]) : 0;
+    };
+
+    return {
+      id: cursoBackend.cursoId || cursoBackend.id || `curso-${index}`,
+      twinId: cursoBackend.twinId || twinId || '',
+      titulo: detalle.nombreClase || 'Curso sin título',
+      institucion: detalle.plataforma || 'Sin institución',
+      instructor: detalle.instructor || 'Sin instructor',
+      tipo: CursoType.ONLINE, // Por defecto online
+      status: CursoStatus.COMPLETADO, // Por defecto completado
+      fechaInicio: detalle.fechaInicio || cursoBackend.createdAt || new Date().toISOString(),
+      fechaFin: detalle.fechaFin,
+      duracionHoras: extraerHoras(detalle.duracion || '0'),
+      certificado: true, // Asumir que tiene certificado
+      descripcion: detalle.loQueAprendere || '',
+      categorias: detalle.categoria ? [detalle.categoria] : [],
+      prerequisitos: detalle.requisitos ? detalle.requisitos.split(', ') : [],
+      habilidadesAdquiridas: detalle.habilidadesCompetencias ? detalle.habilidadesCompetencias.split(', ') : [],
+      notas: detalle.notasPersonales || '',
+      idioma: detalle.idioma || 'Español',
+      tags: detalle.etiquetas ? detalle.etiquetas.split(', ') : [],
+      esPublico: true,
+      createdAt: cursoBackend.createdAt || new Date().toISOString(),
+      updatedAt: cursoBackend.updatedAt || new Date().toISOString()
+    };
+  };
+
+  // Función para cargar cursos del backend
+  const cargarCursos = async () => {
+    if (!twinId) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      console.log('🔄 Cargando cursos para TwinId:', twinId);
+      
+      // Cargar cursos normales y CursosAI en paralelo
+      const [responseCursos, responseCursosAI] = await Promise.allSettled([
+        obtenerCursosDelBackend(twinId),
+        obtenerCursosAIDelBackend(twinId)
+      ]);
+      
+      // Procesar cursos normales
+      if (responseCursos.status === 'fulfilled') {
+        console.log('🔍 Respuesta cursos normales:', responseCursos.value);
+        
+        if (responseCursos.value.success && responseCursos.value.cursos && Array.isArray(responseCursos.value.cursos)) {
+          const cursosMapeados = responseCursos.value.cursos.map(mapearCursoBackend);
+          setCursos(cursosMapeados);
+          console.log('✅ Cursos normales cargados y mapeados:', cursosMapeados);
+        } else {
+          setCursos([]);
+          console.log('📝 No se encontraron cursos normales o formato incorrecto');
+        }
+      } else {
+        console.error('❌ Error al cargar cursos normales:', responseCursos.reason);
+        setCursos([]);
+      }
+
+      // Procesar CursosAI
+      if (responseCursosAI.status === 'fulfilled') {
+        console.log('🤖 Respuesta CursosAI:', responseCursosAI.value);
+        
+        if (responseCursosAI.value.success && responseCursosAI.value.cursos && Array.isArray(responseCursosAI.value.cursos)) {
+          setCursosAI(responseCursosAI.value.cursos);
+          console.log('✅ CursosAI cargados:', responseCursosAI.value.cursos);
+        } else {
+          setCursosAI([]);
+          console.log('🤖 No se encontraron CursosAI o formato incorrecto');
+        }
+      } else {
+        console.error('❌ Error al cargar CursosAI:', responseCursosAI.reason);
+        setCursosAI([]);
+      }
+      
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      setError(errorMessage);
+      console.error('❌ Error general al cargar cursos:', errorMessage);
+      setCursos([]);
+      setCursosAI([]);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  // Cargar cursos al montar el componente o cuando cambie el twinId
+  useEffect(() => {
+    if (twinId) {
+      cargarCursos();
+    }
+  }, [twinId]);
 
   const [filtroStatus, setFiltroStatus] = useState<CursoStatus | 'TODOS'>('TODOS');
   const [filtroTipo, setFiltroTipo] = useState<CursoType | 'TODOS'>('TODOS');
 
-  // Filtrar cursos
-  const cursosFiltrados = cursos.filter(curso => {
-    const matchesSearch = searchTerm === '' || 
-      curso.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      curso.institucion.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      curso.instructor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      curso.categorias.some(cat => cat.toLowerCase().includes(searchTerm.toLowerCase()));
+  // Combinar y filtrar todos los cursos (normales + AI) 
+  const todosCursosFiltrados = [
+    // Cursos normales mapeados con tipo 'normal'
+    ...cursos
+      .filter(curso => {
+        const matchesSearch = searchTerm === '' || 
+          curso.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          curso.institucion.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          curso.instructor.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          curso.categorias.some(cat => cat.toLowerCase().includes(searchTerm.toLowerCase()));
+        
+        const matchesStatus = filtroStatus === 'TODOS' || curso.status === filtroStatus;
+        const matchesTipo = filtroTipo === 'TODOS' || curso.tipo === filtroTipo;
+        
+        return matchesSearch && matchesStatus && matchesTipo;
+      })
+      .map(curso => ({ ...curso, tipoCurso: 'normal' as const })),
     
-    const matchesStatus = filtroStatus === 'TODOS' || curso.status === filtroStatus;
-    const matchesTipo = filtroTipo === 'TODOS' || curso.tipo === filtroTipo;
-    
-    return matchesSearch && matchesStatus && matchesTipo;
-  });
+    // CursosAI mapeados con tipo 'ai'
+    ...cursosAI
+      .filter(cursoAI => {
+        const matchesSearch = searchTerm === '' || 
+          cursoAI.nombreClase?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          cursoAI.categoria?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          cursoAI.instructor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          cursoAI.etiquetas?.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        return matchesSearch;
+      })
+      .map(cursoAI => ({ ...cursoAI, tipoCurso: 'ai' as const }))
+  ];
 
   // Estadísticas
   const stats = {
-    total: cursos.length,
+    total: cursos.length + cursosAI.length,
     completados: cursos.filter(c => c.status === CursoStatus.COMPLETADO).length,
     enProgreso: cursos.filter(c => c.status === CursoStatus.EN_PROGRESO).length,
     planificados: cursos.filter(c => c.status === CursoStatus.PLANIFICADO).length,
     horasTotal: cursos.reduce((total, curso) => total + curso.duracionHoras, 0),
-    certificados: cursos.filter(c => c.certificado && c.status === CursoStatus.COMPLETADO).length
+    certificados: cursos.filter(c => c.certificado && c.status === CursoStatus.COMPLETADO).length,
+    cursosAI: cursosAI.length
   };
 
   const getStatusColor = (status: CursoStatus) => {
@@ -147,10 +253,231 @@ const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
     });
   };
 
+  // Función para renderizar una tarjeta de CursoAI
+  const renderCursoAICard = (cursoAI: any, index: number) => {
+    const extraerHoras = (duracion: string): number => {
+      const match = duracion?.match(/(\d+)/);
+      return match ? parseInt(match[1]) : 0;
+    };
+
+    const horas = extraerHoras(cursoAI.duracion || '0');
+    const categorias = cursoAI.etiquetas ? cursoAI.etiquetas.split(', ').slice(0, 3) : [];
+    
+    return (
+      <Card key={`ai-${cursoAI.id || index}`} className="hover:shadow-lg transition-shadow border-l-4 border-l-purple-500 bg-gradient-to-r from-purple-50 to-blue-50">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <Brain className="w-5 h-5 text-purple-600" />
+                <Badge className="bg-purple-100 text-purple-800 border-purple-200">
+                  Curso AI
+                </Badge>
+              </div>
+              <CardTitle className="text-lg font-semibold text-gray-900 line-clamp-2">
+                {cursoAI.nombreClase || 'Curso AI sin título'}
+              </CardTitle>
+              <div className="flex items-center gap-2 mt-2">
+                <ExternalLink className="w-4 h-4 text-purple-500" />
+                <span className="text-sm text-gray-600">{cursoAI.plataforma || 'AI Platform'}</span>
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Instructor */}
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-gray-600">{cursoAI.instructor || 'Twin Class AI'}</span>
+          </div>
+
+          {/* Duración */}
+          {horas > 0 && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-gray-400" />
+              <span className="text-sm text-gray-600">{horas} horas</span>
+            </div>
+          )}
+
+          {/* Categoría */}
+          {cursoAI.categoria && (
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-gray-400" />
+              <span className="text-sm text-gray-600">{cursoAI.categoria}</span>
+            </div>
+          )}
+
+          {/* Precio */}
+          {cursoAI.precio && (
+            <div className="flex items-center gap-2">
+              <Star className="w-4 h-4 text-green-400" />
+              <span className="text-sm font-medium text-green-600">{cursoAI.precio}</span>
+            </div>
+          )}
+
+          {/* Etiquetas */}
+          <div className="flex flex-wrap gap-1">
+            {categorias.map((etiqueta: string, idx: number) => (
+              <Badge key={idx} variant="outline" className="text-xs border-purple-200 text-purple-700">
+                {etiqueta.trim()}
+              </Badge>
+            ))}
+            {cursoAI.etiquetas && cursoAI.etiquetas.split(', ').length > 3 && (
+              <Badge variant="outline" className="text-xs border-purple-200 text-purple-700">
+                +{cursoAI.etiquetas.split(', ').length - 3}
+              </Badge>
+            )}
+          </div>
+
+          {/* Descripción */}
+          {cursoAI.loQueAprendere && (
+            <p className="text-sm text-gray-600 line-clamp-2">
+              {cursoAI.loQueAprendere}
+            </p>
+          )}
+
+          {/* Información del archivo */}
+          {(cursoAI.NombreArchivo || cursoAI.NumeroPaginas) && (
+            <div className="bg-purple-50 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-purple-600" />
+                <span className="text-sm font-medium text-purple-800">Documento base</span>
+              </div>
+              {cursoAI.NombreArchivo && (
+                <p className="text-xs text-purple-700">{cursoAI.NombreArchivo}</p>
+              )}
+              {cursoAI.NumeroPaginas && (
+                <p className="text-xs text-purple-700">{cursoAI.NumeroPaginas} páginas</p>
+              )}
+              {cursoAI.TieneIndice && cursoAI.PaginaInicioIndice && (
+                <p className="text-xs text-purple-700">
+                  Índice: págs. {cursoAI.PaginaInicioIndice}
+                  {cursoAI.PaginaFinIndice && cursoAI.PaginaFinIndice !== cursoAI.PaginaInicioIndice 
+                    ? ` - ${cursoAI.PaginaFinIndice}` 
+                    : ''
+                  }
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Acciones */}
+          <div className="flex flex-col gap-2 pt-2">
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1 border-purple-200 text-purple-700 hover:bg-purple-50"
+                onClick={() => navigate(`/mi-conocimiento/cursosAI/editar/${cursoAI.id}`)}
+              >
+                <Edit className="w-4 h-4 mr-1" />
+                Editar
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                onClick={() => navigate(`/mi-conocimiento/cursosAI/detalles/${cursoAI.id}`, {
+                  state: { cursoAI: cursoAI, esAI: true }
+                })}
+              >
+                <Eye className="w-4 h-4 mr-1" />
+                Ver Detalles
+              </Button>
+            </div>
+            <Button 
+              variant="secondary" 
+              size="sm"
+              className="w-full bg-purple-100 text-purple-700 hover:bg-purple-200"
+              onClick={() => {
+                console.log('🚀 Navegando a capítulos de CursoAI:', cursoAI);
+                console.log('📚 Capítulos del CursoAI:', cursoAI.capitulos);
+                navigate(`/mi-conocimiento/cursosAI/${cursoAI.id}/capitulos`, {
+                  state: { cursoAI: cursoAI, esAI: true }
+                });
+              }}
+            >
+              <BookOpenCheck className="w-4 h-4 mr-1" />
+              Ver Capítulos ({cursoAI.capitulos?.length || 0})
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // Manejo de estados de carga
+  if (twinIdLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin mr-2" />
+        <span className="text-gray-600">Cargando información del usuario...</span>
+      </div>
+    );
+  }
+
+  if (twinIdError || !twinId) {
+    return (
+      <div className="text-center py-12">
+        <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-gray-700 mb-2">Error de autenticación</h3>
+        <p className="text-gray-500 mb-4">
+          {twinIdError || 'No se pudo identificar al usuario'}
+        </p>
+        <Button onClick={() => window.location.reload()}>
+          Reintentar
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Header con botón de refresh */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Mis Cursos</h2>
+        <Button
+          variant="outline" 
+          size="sm"
+          onClick={cargarCursos}
+          disabled={loading}
+          className="flex items-center gap-2"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Actualizar
+        </Button>
+      </div>
+
+      {/* Error de carga */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
+          <div>
+            <h4 className="text-sm font-medium text-red-800">Error al cargar cursos</h4>
+            <p className="text-sm text-red-700 mt-1">{error}</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={cargarCursos}
+              className="mt-2"
+            >
+              Reintentar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Loading state */}
+      {loading && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+          <span className="text-gray-600">Cargando cursos...</span>
+        </div>
+      )}
+
       {/* Estadísticas */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {!loading && (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
         <Card className="text-center">
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
@@ -187,9 +514,17 @@ const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
             <div className="text-sm text-gray-600">Certificados</div>
           </CardContent>
         </Card>
+        <Card className="text-center bg-gradient-to-br from-purple-50 to-blue-50 border-purple-200">
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-purple-600">{stats.cursosAI}</div>
+            <div className="text-sm text-purple-700 font-medium">Cursos AI</div>
+          </CardContent>
+        </Card>
       </div>
+      )}
 
       {/* Filtros y búsqueda */}
+      {!loading && (
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex flex-wrap gap-2">
           <select
@@ -216,117 +551,175 @@ const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
           </select>
         </div>
 
-        <Button className="bg-green-600 hover:bg-green-700">
-          <Plus className="w-4 h-4 mr-2" />
-          Agregar Curso
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button 
+            className="bg-green-600 hover:bg-green-700"
+            onClick={() => navigate('/mi-conocimiento/cursos/agregar')}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Agregar Curso
+          </Button>
+          
+          <Button 
+            className="bg-blue-600 hover:bg-blue-700"
+            onClick={() => navigate('/mi-conocimiento/cursos/agregar-documento')}
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Agregar Curso con Documento
+          </Button>
+          
+          <Button 
+            className="bg-purple-600 hover:bg-purple-700"
+            onClick={() => navigate('/mi-conocimiento/cursos/agregar-ai')}
+          >
+            <Brain className="w-4 h-4 mr-2" />
+            Agregar Curso con AI
+          </Button>
+        </div>
       </div>
+      )}
 
-      {/* Lista de cursos */}
+      {/* Lista combinada de cursos */}
+      {!loading && (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {cursosFiltrados.map((curso) => (
-          <Card key={curso.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <CardTitle className="text-lg font-semibold text-gray-900 line-clamp-2">
-                    {curso.titulo}
-                  </CardTitle>
-                  <div className="flex items-center gap-2 mt-2">
-                    {getTipoIcon(curso.tipo)}
-                    <span className="text-sm text-gray-600">{curso.institucion}</span>
+        {todosCursosFiltrados.map((item, index) => {
+          // Renderizar CursoAI
+          if (item.tipoCurso === 'ai') {
+            return renderCursoAICard(item, index);
+          }
+          
+          // Renderizar curso normal
+          const curso = item as CursoMapeado & { tipoCurso: 'normal' };
+          return (
+            <Card key={curso.id} className="hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <CardTitle className="text-lg font-semibold text-gray-900 line-clamp-2">
+                      {curso.titulo}
+                    </CardTitle>
+                    <div className="flex items-center gap-2 mt-2">
+                      {getTipoIcon(curso.tipo)}
+                      <span className="text-sm text-gray-600">{curso.institucion}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 items-end">
+                    <Badge className={getStatusColor(curso.status)}>
+                      {curso.status.replace('_', ' ')}
+                    </Badge>
+                    {curso.certificado && curso.status === CursoStatus.COMPLETADO && (
+                      <Award className="w-5 h-5 text-amber-500" />
+                    )}
                   </div>
                 </div>
-                <div className="flex flex-col gap-2 items-end">
-                  <Badge className={getStatusColor(curso.status)}>
-                    {curso.status.replace('_', ' ')}
-                  </Badge>
-                  {curso.certificado && curso.status === CursoStatus.COMPLETADO && (
-                    <Award className="w-5 h-5 text-amber-500" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Instructor */}
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm text-gray-600">{curso.instructor}</span>
+                </div>
+
+                {/* Duración y progreso */}
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm text-gray-600">{curso.duracionHoras} horas</span>
+                  {curso.progreso && (
+                    <div className="flex-1 ml-2">
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full" 
+                          style={{ width: `${curso.progreso}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-xs text-gray-500 mt-1">{curso.progreso}%</span>
+                    </div>
                   )}
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Instructor */}
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-gray-400" />
-                <span className="text-sm text-gray-600">{curso.instructor}</span>
-              </div>
 
-              {/* Duración y progreso */}
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-400" />
-                <span className="text-sm text-gray-600">{curso.duracionHoras} horas</span>
-                {curso.progreso && (
-                  <div className="flex-1 ml-2">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full" 
-                        style={{ width: `${curso.progreso}%` }}
-                      ></div>
-                    </div>
-                    <span className="text-xs text-gray-500 mt-1">{curso.progreso}%</span>
+                {/* Fechas */}
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm text-gray-600">
+                    {formatearFecha(curso.fechaInicio)}
+                    {curso.fechaFin && ` - ${formatearFecha(curso.fechaFin)}`}
+                  </span>
+                </div>
+
+                {/* Calificación */}
+                {curso.calificacion && (
+                  <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                    <span className="text-sm font-medium">{curso.calificacion}/5.0</span>
                   </div>
                 )}
-              </div>
 
-              {/* Fechas */}
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-gray-400" />
-                <span className="text-sm text-gray-600">
-                  {formatearFecha(curso.fechaInicio)}
-                  {curso.fechaFin && ` - ${formatearFecha(curso.fechaFin)}`}
-                </span>
-              </div>
-
-              {/* Calificación */}
-              {curso.calificacion && (
-                <div className="flex items-center gap-2">
-                  <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                  <span className="text-sm font-medium">{curso.calificacion}/5.0</span>
+                {/* Categorías */}
+                <div className="flex flex-wrap gap-1">
+                  {curso.categorias.slice(0, 3).map((categoria) => (
+                    <Badge key={categoria} variant="outline" className="text-xs">
+                      {categoria}
+                    </Badge>
+                  ))}
+                  {curso.categorias.length > 3 && (
+                    <Badge variant="outline" className="text-xs">
+                      +{curso.categorias.length - 3}
+                    </Badge>
+                  )}
                 </div>
-              )}
 
-              {/* Categorías */}
-              <div className="flex flex-wrap gap-1">
-                {curso.categorias.slice(0, 3).map((categoria) => (
-                  <Badge key={categoria} variant="outline" className="text-xs">
-                    {categoria}
-                  </Badge>
-                ))}
-                {curso.categorias.length > 3 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{curso.categorias.length - 3}
-                  </Badge>
+                {/* Descripción */}
+                {curso.descripcion && (
+                  <p className="text-sm text-gray-600 line-clamp-2">
+                    {curso.descripcion}
+                  </p>
                 )}
-              </div>
 
-              {/* Descripción */}
-              {curso.descripcion && (
-                <p className="text-sm text-gray-600 line-clamp-2">
-                  {curso.descripcion}
-                </p>
-              )}
-
-              {/* Acciones */}
-              <div className="flex gap-2 pt-2">
-                <Button variant="outline" size="sm" className="flex-1">
-                  Ver Detalles
-                </Button>
-                {curso.urlCertificado && (
-                  <Button variant="outline" size="sm">
-                    <ExternalLink className="w-4 h-4" />
+                {/* Acciones */}
+                <div className="flex flex-col gap-2 pt-2">
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={() => navigate(`/mi-conocimiento/cursos/editar/${curso.id}`)}
+                    >
+                      <Edit className="w-4 h-4 mr-1" />
+                      Editar
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => navigate(`/mi-conocimiento/cursos/detalles/${curso.id}`)}
+                    >
+                      <Eye className="w-4 h-4 mr-1" />
+                      Ver Detalles
+                    </Button>
+                    {curso.urlCertificado && (
+                      <Button variant="outline" size="sm">
+                        <ExternalLink className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                  <Button 
+                    variant="secondary" 
+                    size="sm"
+                    className="w-full"
+                    onClick={() => navigate(`/mi-conocimiento/cursos/${curso.id}/capitulos`)}
+                  >
+                    <BookOpenCheck className="w-4 h-4 mr-1" />
+                    Ver Capítulos
                   </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
+      )}
 
       {/* Mensaje si no hay cursos */}
-      {cursosFiltrados.length === 0 && (
+      {!loading && todosCursosFiltrados.length === 0 && (
         <div className="text-center py-12">
           <GraduationCap className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700 mb-2">
@@ -335,13 +728,25 @@ const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
           <p className="text-gray-500 mb-4">
             {searchTerm 
               ? 'Intenta con otros términos de búsqueda' 
-              : 'Comienza agregando los cursos que has tomado o planeas tomar'
+              : 'Comienza agregando cursos tradicionales o genera cursos con AI desde documentos'
             }
           </p>
-          <Button className="bg-green-600 hover:bg-green-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Agregar Primer Curso
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+            <Button 
+              className="bg-green-600 hover:bg-green-700"
+              onClick={() => navigate('/mi-conocimiento/cursos/agregar')}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Agregar Primer Curso
+            </Button>
+            <Button 
+              className="bg-purple-600 hover:bg-purple-700"
+              onClick={() => navigate('/mi-conocimiento/cursos/agregar-documento')}
+            >
+              <Brain className="w-4 h-4 mr-2" />
+              Crear Curso con AI
+            </Button>
+          </div>
         </div>
       )}
     </div>

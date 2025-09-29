@@ -55,7 +55,18 @@ import MiConocimientoPage from "@/pages/MiConocimientoPage";
 import LibrosPage from "@/pages/LibrosPage";
 import CursosPage from "@/pages/CursosPage";
 import AgregarLibroPage from "@/pages/AgregarLibroPage";
+import AgregarCursoPage from "@/pages/AgregarCursoPage";
+import AgregarCursoConDocumentoPage from "@/pages/AgregarCursoConDocumentoPage";
 import EditarLibroPage from "@/pages/EditarLibroPage";
+import EditarCursoPage from "@/pages/EditarCursoPage";
+import DetallesCursoPage from "@/pages/conocimiento/DetallesCursoPage";
+import CapitulosCursoPage from "@/pages/conocimiento/CapitulosCursoPage";
+// Use the standard CapitulosCursoAIPage (working floating/chat variant)
+import VerCapitulosAIPage from '@/pages/conocimiento/VerCapitulosAIPage';
+import AgregarEditarCapituloPage from "@/pages/conocimiento/AgregarEditarCapituloPage";
+import NotebooksCapituloPage from "@/pages/conocimiento/NotebooksCapituloPage";
+import VerDetallesCapituloPage from "@/pages/conocimiento/VerDetallesCapituloPage";
+import VerDetallesCapituloAIPage from "@/pages/conocimiento/VerDetallesCapituloAIPage";
 import BookNotesPage from "@/pages/BookNotesPage";
 import AnalisisAIPage from "@/pages/AnalisisAIPage";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -115,6 +126,55 @@ const router = createBrowserRouter([
             {
                 path: "mi-conocimiento/cursos",
                 element: <ProtectedRoute><CursosPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos/agregar",
+                element: <ProtectedRoute><AgregarCursoPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos/agregar-documento",
+                element: <ProtectedRoute><AgregarCursoConDocumentoPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos/editar/:cursoId",
+                element: <ProtectedRoute><EditarCursoPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos/detalles/:cursoId",
+                element: <ProtectedRoute><DetallesCursoPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos/:cursoId/capitulos",
+                element: <ProtectedRoute><CapitulosCursoPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos/:cursoId/capitulos/agregar",
+                element: <ProtectedRoute><AgregarEditarCapituloPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos/:cursoId/capitulos/:capituloId/editar",
+                element: <ProtectedRoute><AgregarEditarCapituloPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos/:cursoId/capitulos/:capituloId/notebooks",
+                element: <ProtectedRoute><NotebooksCapituloPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos/:cursoId/capitulos/:capituloId/detalles",
+                element: <ProtectedRoute><VerDetallesCapituloPage /></ProtectedRoute>,
+            },
+            // Rutas específicas para CursosAI
+            {
+                path: "mi-conocimiento/cursosAI/detalles/:cursoId",
+                element: <ProtectedRoute><DetallesCursoPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursosAI/:cursoId/capitulos",
+                element: <ProtectedRoute><VerCapitulosAIPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursosAI/:cursoId/capitulos/:capituloId/detalles",
+                element: <ProtectedRoute><VerDetallesCapituloAIPage /></ProtectedRoute>,
             },
             {
                 path: "twin-biografia/fotos",

@@ -267,11 +267,106 @@ export function mapBookAIResponseToBook(aiResponse: BookAIResponse, userInput: P
 }
 
 // ============================================================================
+// INTERFACES PARA BÚSQUEDA DE CURSOS (BACKEND API)
+// ============================================================================
+
+export interface DetalleCurso {
+  nombreClase: string;
+  instructor: string;
+  plataforma: string;
+  categoria: string;
+  duracion: string;
+  requisitos: string;
+  loQueAprendere: string;
+  precio: string;
+  recursos: string;
+  idioma: string;
+  fechaInicio: string;
+  fechaFin: string;
+  enlaces: EnlacesCurso;
+  // Nuevos campos agregados
+  objetivosdeAprendizaje: string;
+  habilidadesCompetencias: string;
+  prerequisitos: string;
+  // Campos adicionales del formulario
+  etiquetas?: string;
+  notasPersonales?: string;
+  // Campo para análisis HTML completo
+  htmlDetails?: string;
+}
+
+export interface EnlacesCurso {
+  enlaceClase: string;
+  enlaceInstructor: string;
+  enlacePlataforma: string;
+  enlaceCategoria: string;
+}
+
+// ============================================================================
 // CURSOS
 // ============================================================================
 
+// Interfaces para la respuesta del backend de búsqueda de cursos
+export interface Enlaces {
+  enlaceClase: string;
+  enlaceInstructor: string;
+  enlacePlataforma: string;
+  enlaceCategoria: string;
+}
+
+export interface DetalleCurso {
+  nombreClase: string;
+  instructor: string;
+  plataforma: string;
+  categoria: string;
+  duracion: string;
+  requisitos: string;
+  loQueAprendere: string;
+  precio: string;
+  recursos: string;
+  idioma: string;
+  fechaInicio: string;
+  fechaFin: string;
+  enlaces: Enlaces;
+  // Nuevos campos agregados
+  objetivosdeAprendizaje: string;
+  habilidadesCompetencias: string;
+  prerequisitos: string;
+  // Campos adicionales del formulario
+  etiquetas?: string;
+  notasPersonales?: string;
+}
+
+export interface CursoBusqueda {
+  cursosEcontrados: DetalleCurso[];  // Nombre exacto del backend (sin 'n')
+  htmlDetalles: string;
+  respuesta: string;
+  resumen: string;
+  puntosClaves: string[];
+  enlaces: string[];
+  accionesRecomendadas: string[];
+}
+
+export interface CourseSearchResponse {
+  success: boolean;
+  data: {
+    question: string;
+    searchResults: CursoBusqueda;  // Cambiado de cursoBusquedaResults a searchResults
+    enhancedAnswer: string;
+    summary: string;
+    keyInsights: string[];
+    recommendedActions: string[];
+    disclaimer: string;
+  };
+  twinId: string;
+  processingTimeMs: number;
+  processedAt: string;
+  message: string;
+}
+
 export interface Curso {
   id: string;
+  twinId: string; // ID del Twin usuario asociado
   titulo: string;
   institucion: string;
   instructor: string;
@@ -364,4 +459,163 @@ export interface CursoStats {
   cursosGratuitos: number;
   cursosPagados: number;
   inversionTotal: number;
+}
+
+// Interface adicional para compatibilidad con sistemas externos
+export interface Course {
+  id: string;
+  twinId?: string; // ID del Twin usuario asociado
+  title: string;
+  institution?: string;
+  startDate?: string; // ISO
+  endDate?: string; // ISO
+  status?: 'completed' | 'in-progress' | 'planned';
+  certificate?: boolean;
+  certificateUrl?: string;
+  description?: string;
+  skills?: string[];
+  level?: 'Beginner' | 'Intermediate' | 'Advanced';
+  durationHours?: number;
+  grade?: string | number;
+  platform?: string;
+  language?: string;
+  tags?: string[];
+  imageUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  // Campos adicionales útiles
+  instructor?: string;
+  price?: number;
+  currency?: string;
+  rating?: number;
+  completionPercentage?: number;
+  notes?: string;
+  category?: string;
+  prerequisites?: string[];
+  learningObjectives?: string[];
+  courseMaterials?: string[];
+  enrollmentDate?: string;
+  favorited?: boolean;
+  // Campos específicos del backend
+  requisitos?: string; // Requisitos del curso
+  recursos?: string; // Recursos disponibles
+  loQueAprendere?: string; // Lo que se aprenderá
+  enlaceClase?: string; // Enlace al curso
+  enlaceInstructor?: string; // Enlace del instructor
+  enlacePlataforma?: string; // Enlace de la plataforma
+  enlaceCategoria?: string; // Enlace de la categoría
+  // Nuevos campos del backend
+  objetivosdeAprendizaje?: string; // Objetivos de aprendizaje
+  habilidadesCompetencias?: string; // Habilidades y competencias
+  prerequisitos?: string; // Prerequisitos como string único
+  // Campos adicionales del formulario
+  etiquetas?: string; // Etiquetas del usuario
+  notasPersonales?: string; // Notas personales del usuario
+}
+
+// ============================================================================
+// CAPÍTULOS DE CURSOS
+// ============================================================================
+
+export interface CapituloCurso {
+  id: string;
+  cursoId: string;
+  twinId: string;
+  titulo: string;
+  descripcion?: string;
+  numeroCapitulo: number;
+  duracionMinutos?: number;
+  fechaCreacion: string;
+  fechaActualizacion: string;
+  // Contenido del capítulo
+  transcript?: string; // Transcript del capítulo/clase
+  notebooks: NotebookCapitulo[]; // Código/notebooks del capítulo
+  comentarios?: string; // Mis comentarios sobre el capítulo
+  puntuacion?: number; // Mi score del capítulo (1-5)
+  documentos: DocumentoCapitulo[]; // PDFs y otros documentos
+  completado: boolean;
+  fechaCompletado?: string;
+  tiempoEstudiado?: number; // Tiempo en minutos estudiado
+  tags?: string[];
+  notas?: string; // Notas adicionales
+}
+
+export interface NotebookCapitulo {
+  id: string;
+  capituloId: string;
+  titulo: string;
+  descripcion?: string;
+  lenguaje: 'python' | 'javascript' | 'typescript' | 'sql' | 'r' | 'julia' | 'markdown' | 'other';
+  contenido: string; // Código del notebook
+  archivos?: ArchivoNotebook[]; // Archivos adicionales (.py, .js, .ipynb, etc.)
+  fechaCreacion: string;
+  fechaActualizacion: string;
+  ejecutable: boolean;
+  estado: 'draft' | 'working' | 'completed' | 'error';
+}
+
+export interface ArchivoNotebook {
+  id: string;
+  notebookId: string;
+  nombreArchivo: string;
+  extension: string;
+  tamanoBytes: number;
+  urlArchivo: string; // URL para descargar/acceder al archivo
+  tipoMime: string;
+  fechaSubida: string;
+}
+
+export interface DocumentoCapitulo {
+  id: string;
+  capituloId: string;
+  titulo: string;
+  descripcion?: string;
+  tipoDocumento: 'pdf' | 'word' | 'powerpoint' | 'excel' | 'image' | 'video' | 'audio' | 'other';
+  tamanoBytes: number;
+  urlArchivo: string; // URL para descargar/acceder al archivo
+  fechaSubida: string;
+  tags?: string[];
+  notas?: string;
+}
+
+export interface CapituloStats {
+  totalCapitulos: number;
+  capitulosCompletados: number;
+  capitulosEnProgreso: number;
+  tiempoTotalEstudiado: number; // minutos
+  puntuacionPromedio: number;
+  notebooksCreados: number;
+  documentosSubidos: number;
+  transcriptsDisponibles: number;
+}
+
+// Interfaces para formularios
+export interface CapituloFormData {
+  titulo: string;
+  descripcion?: string;
+  numeroCapitulo: number;
+  duracionMinutos?: number;
+  transcript?: string;
+  comentarios?: string;
+  puntuacion?: number;
+  tags?: string[];
+  notas?: string;
+}
+
+export interface NotebookFormData {
+  titulo: string;
+  descripcion?: string;
+  lenguaje: 'python' | 'javascript' | 'typescript' | 'sql' | 'r' | 'julia' | 'markdown' | 'other';
+  contenido: string;
+  ejecutable: boolean;
+  estado: 'draft' | 'working' | 'completed' | 'error';
+}
+
+export interface DocumentoFormData {
+  titulo: string;
+  descripcion?: string;
+  tipoDocumento: 'pdf' | 'word' | 'powerpoint' | 'excel' | 'image' | 'video' | 'audio' | 'other';
+  archivo: File;
+  tags?: string[];
+  notas?: string;
 }
