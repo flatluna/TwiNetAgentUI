@@ -385,9 +385,11 @@ const DatosPersonalesPage: React.FC = () => {
         
         try {
             console.log(`🔄 Cargando datos del twin: ${TWIN_ID}`);
+            // Use the correct method that works: getTwinByIdentifier
             const response = await twinApiService.getTwinByIdentifier(TWIN_ID);
             
             if (response.success && response.data) {
+                // getTwinByIdentifier returns the profile directly
                 const twinData = response.data;
                 console.log('✅ Datos del twin cargados:', twinData);
                 
@@ -529,7 +531,8 @@ const DatosPersonalesPage: React.FC = () => {
                 }
                 
             } else {
-                setLoadError(response.error || 'Error al cargar los datos del twin');
+                // Handle the case where no profile is found
+                setLoadError(response.error || 'No se encontró el perfil del twin');
                 console.error('❌ Error al cargar twin:', response.error);
             }
         } catch (error) {

@@ -84,10 +84,27 @@ const DialogDescription: React.FC<DialogDescriptionProps> = ({ className, childr
   </p>
 );
 
+interface DialogFooterProps {
+  className?: string;
+  children: React.ReactNode;
+}
+
+const DialogFooter: React.FC<DialogFooterProps> = ({ className, children }) => (
+  <div
+    className={cn(
+      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-4",
+      className
+    )}
+  >
+    {children}
+  </div>
+);
+
 export {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 };

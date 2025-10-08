@@ -1,26 +1,17 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Brain, 
   Book, 
   GraduationCap, 
-  Award, 
   Target, 
-  FileText,
-  Video,
-  Mic,
-  Globe,
-  Lightbulb,
-  Users,
   BookOpen,
   Plus,
   BarChart3,
-  TrendingUp,
-  Clock
+  TrendingUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 
 const MiConocimientoPage: React.FC = () => {
   const navigate = useNavigate();
@@ -62,24 +53,6 @@ const MiConocimientoPage: React.FC = () => {
       }
     },
     {
-      id: 'certificaciones',
-      title: 'Certificaciones',
-      description: 'Títulos, diplomas y reconocimientos',
-      icon: Award,
-      color: 'from-yellow-500 to-yellow-600',
-      textColor: 'text-yellow-600',
-      bgColor: 'bg-yellow-50',
-      count: 12,
-      recent: 1,
-      path: '/mi-conocimiento/certificaciones',
-      disabled: true,
-      stats: {
-        completed: 12,
-        inProgress: 0,
-        planned: 0
-      }
-    },
-    {
       id: 'habilidades',
       title: 'Habilidades',
       description: 'Competencias y niveles de dominio',
@@ -90,115 +63,6 @@ const MiConocimientoPage: React.FC = () => {
       count: 28,
       recent: 4,
       path: '/mi-conocimiento/habilidades',
-      disabled: true,
-      stats: {
-        completed: 0,
-        inProgress: 0,
-        planned: 0
-      }
-    },
-    {
-      id: 'articulos',
-      title: 'Artículos & Papers',
-      description: 'Investigaciones y artículos técnicos',
-      icon: FileText,
-      color: 'from-indigo-500 to-indigo-600',
-      textColor: 'text-indigo-600',
-      bgColor: 'bg-indigo-50',
-      count: 156,
-      recent: 8,
-      path: '/mi-conocimiento/articulos',
-      disabled: true,
-      stats: {
-        completed: 0,
-        inProgress: 0,
-        planned: 0
-      }
-    },
-    {
-      id: 'documentales',
-      title: 'Documentales & Videos',
-      description: 'Contenido audiovisual educativo',
-      icon: Video,
-      color: 'from-red-500 to-red-600',
-      textColor: 'text-red-600',
-      bgColor: 'bg-red-50',
-      count: 89,
-      recent: 12,
-      path: '/mi-conocimiento/documentales',
-      disabled: true,
-      stats: {
-        completed: 0,
-        inProgress: 0,
-        planned: 0
-      }
-    },
-    {
-      id: 'conferencias',
-      title: 'Conferencias & Webinars',
-      description: 'Eventos y presentaciones asistidas',
-      icon: Users,
-      color: 'from-pink-500 to-pink-600',
-      textColor: 'text-pink-600',
-      bgColor: 'bg-pink-50',
-      count: 34,
-      recent: 5,
-      path: '/mi-conocimiento/conferencias',
-      disabled: true,
-      stats: {
-        completed: 0,
-        inProgress: 0,
-        planned: 0
-      }
-    },
-    {
-      id: 'podcasts',
-      title: 'Podcasts',
-      description: 'Audio educativo y episodios favoritos',
-      icon: Mic,
-      color: 'from-teal-500 to-teal-600',
-      textColor: 'text-teal-600',
-      bgColor: 'bg-teal-50',
-      count: 67,
-      recent: 15,
-      path: '/mi-conocimiento/podcasts',
-      disabled: true,
-      stats: {
-        completed: 0,
-        inProgress: 0,
-        planned: 0
-      }
-    },
-    {
-      id: 'idiomas',
-      title: 'Idiomas',
-      description: 'Aprendizaje y progreso en idiomas',
-      icon: Globe,
-      color: 'from-orange-500 to-orange-600',
-      textColor: 'text-orange-600',
-      bgColor: 'bg-orange-50',
-      count: 4,
-      recent: 1,
-      path: '/mi-conocimiento/idiomas',
-      disabled: true,
-      stats: {
-        completed: 0,
-        inProgress: 0,
-        planned: 0
-      }
-    },
-    {
-      id: 'proyectos',
-      title: 'Proyectos de Aprendizaje',
-      description: 'Proyectos prácticos y experimentación',
-      icon: Lightbulb,
-      color: 'from-cyan-500 to-cyan-600',
-      textColor: 'text-cyan-600',
-      bgColor: 'bg-cyan-50',
-      count: 19,
-      recent: 3,
-      path: '/mi-conocimiento/proyectos',
-      disabled: true,
       stats: {
         completed: 0,
         inProgress: 0,
@@ -211,7 +75,7 @@ const MiConocimientoPage: React.FC = () => {
   const generalStats = {
     totalItems: knowledgeTypes.reduce((sum, type) => sum + type.count, 0),
     recentActivity: knowledgeTypes.reduce((sum, type) => sum + type.recent, 0),
-    activeAreas: knowledgeTypes.filter(type => !type.disabled).length,
+    activeAreas: knowledgeTypes.length,
     completedThisMonth: 15
   };
 
@@ -272,11 +136,7 @@ const MiConocimientoPage: React.FC = () => {
           {knowledgeTypes.map((item) => (
             <Card 
               key={item.id}
-              className={`cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-105 ${
-                item.disabled 
-                  ? 'opacity-60 cursor-not-allowed hover:scale-100 hover:shadow-md' 
-                  : 'hover:shadow-2xl'
-              }`}
+              className="cursor-pointer transition-all duration-300 hover:shadow-2xl hover:scale-105"
               onClick={() => handleCardClick(item)}
             >
               <CardHeader className="pb-3">
@@ -284,11 +144,6 @@ const MiConocimientoPage: React.FC = () => {
                   <div className={`p-3 rounded-xl bg-gradient-to-br ${item.color} shadow-lg`}>
                     <item.icon className="w-6 h-6 text-white" />
                   </div>
-                  {item.disabled && (
-                    <Badge variant="outline" className="text-xs">
-                      Próximamente
-                    </Badge>
-                  )}
                 </div>
                 <CardTitle className="text-xl font-bold text-gray-900">
                   {item.title}
@@ -314,8 +169,7 @@ const MiConocimientoPage: React.FC = () => {
                 </div>
 
                 {/* Mini estadísticas */}
-                {!item.disabled && (
-                  <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="grid grid-cols-3 gap-2 text-center">
                     <div className={`${item.bgColor} rounded-lg p-2`}>
                       <div className={`text-lg font-bold ${item.textColor}`}>
                         {item.stats.completed}
@@ -335,20 +189,43 @@ const MiConocimientoPage: React.FC = () => {
                       <div className="text-xs text-gray-600">Planificados</div>
                     </div>
                   </div>
-                )}
 
-                {/* Botón de acción */}
-                <div className="pt-2">
-                  {item.disabled ? (
-                    <Button variant="outline" className="w-full" disabled>
-                      <Clock className="w-4 h-4 mr-2" />
-                      Próximamente
-                    </Button>
-                  ) : (
-                    <Button className={`w-full bg-gradient-to-r ${item.color} hover:opacity-90 transition-opacity`}>
-                      <BookOpen className="w-4 h-4 mr-2" />
-                      Explorar
-                    </Button>
+                {/* Botones de acción */}
+                <div className="pt-2 space-y-2">
+                  <Button className={`w-full bg-gradient-to-r ${item.color} hover:opacity-90 transition-opacity`}>
+                    <BookOpen className="w-4 h-4 mr-2" />
+                    Explorar
+                  </Button>
+                  
+                  {/* Botones adicionales para Habilidades */}
+                  {item.id === 'habilidades' && (
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="text-xs border-purple-300 text-purple-700 hover:bg-purple-100 font-medium"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/nuevo-aprendi');
+                        }}
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        Nuevo aprendi
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        className="text-xs border-purple-300 text-purple-700 hover:bg-purple-100 font-medium"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          alert('Conocimiento + clicked!'); // Debug visual
+                          console.log('Conocimiento + clicked');
+                        }}
+                      >
+                        <Brain className="w-3 h-3 mr-1" />
+                        Conocimiento +
+                      </Button>
+                    </div>
                   )}
                 </div>
               </CardContent>

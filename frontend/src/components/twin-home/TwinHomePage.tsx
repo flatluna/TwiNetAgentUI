@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useMsal } from "@azure/msal-react";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import GoogleMapsLoader from "@/utils/googleMapsLoader";
@@ -96,6 +97,21 @@ interface TwinProfile {
 
 const TwinHomePage: React.FC = () => {
     const navigate = useNavigate();
+    const { accounts } = useMsal();
+    
+    // Función para obtener el Twin ID del usuario actual
+    const getTwinId = (): string | null => {
+        try {
+            if (accounts && accounts.length > 0) {
+                const account = accounts[0];
+                return account.localAccountId; // Usar el ID de la cuenta de MSAL
+            }
+            return null;
+        } catch (error) {
+            console.error('❌ Error getting Twin ID:', error);
+            return null;
+        }
+    };
     
     const [profile, setProfile] = useState<TwinProfile>({
         id: "",
@@ -194,7 +210,15 @@ const TwinHomePage: React.FC = () => {
 
         setIsCreatingTwin(true);
         try {
+            // Obtener el Twin ID del usuario actual
+            const currentTwinId = getTwinId();
+            if (!currentTwinId) {
+                alert('Error: No se pudo identificar el usuario actual.');
+                return;
+            }
+
             const twinData: TwinProfileData = {
+                twinId: currentTwinId, // Incluir el twinId en los datos
                 twinName: profile.twinName,
                 firstName: profile.firstName,
                 lastName: profile.lastName,
@@ -211,6 +235,8 @@ const TwinHomePage: React.FC = () => {
                 languages: profile.languages,
                 countryId: profile.countryId
             };
+
+            console.log('� Creating twin profile with data:', twinData);
 
             const result = await twinApiService.createTwin(twinData);
             if (result.success) {

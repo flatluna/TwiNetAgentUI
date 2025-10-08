@@ -20,6 +20,8 @@ export interface CursoSeleccionado {
   precio: string;
   recursos: string;
   idioma: string;
+  // Propiedad adicional usada por algunos backends (capitalized)
+  Idioma?: string;
   fechaInicio: string;
   fechaFin: string;
   objetivosdeAprendizaje: string;
@@ -90,6 +92,7 @@ export async function crearCursoEnBackend(
       precio: curso.precio || '',
       recursos: curso.recursos || '',
       idioma: curso.idioma || 'Español',
+        Idioma: curso.idioma || 'Español',
       fechaInicio: curso.fechaInicio || '',
       fechaFin: curso.fechaFin || '',
       objetivosdeAprendizaje: curso.objetivosdeAprendizaje || '',
@@ -233,6 +236,7 @@ export async function actualizarCursoEnBackend(
       precio: curso.precio || '',
       recursos: curso.recursos || '',
       idioma: curso.idioma || 'Español',
+  Idioma: curso.idioma || 'Español',
       fechaInicio: curso.fechaInicio || '',
       fechaFin: curso.fechaFin || '',
       objetivosdeAprendizaje: curso.objetivosdeAprendizaje || '',

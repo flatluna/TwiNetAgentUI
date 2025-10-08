@@ -1,0 +1,466 @@
+import React, { useState } from 'react';
+import { 
+  X, 
+  BookOpen, 
+  Play, 
+  Globe, 
+  Award, 
+  Users, 
+  Tool, 
+  Route, 
+  Tag,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Clock,
+  Star
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+
+// Interfaces para los tipos de recursos
+interface CursoOnline {
+  titulo: string;
+  plataforma: string;
+  url: string;
+  duracion: string;
+  nivel: string;
+  precio: string;
+  calificacion?: number;
+}
+
+interface LibroRecomendado {
+  titulo: string;
+  autor: string;
+  editorial?: string;
+  isbn?: string;
+  descripcion: string;
+  nivel: string;
+}
+
+interface VideoTutorial {
+  titulo: string;
+  canal: string;
+  url: string;
+  duracion: string;
+  descripcion: string;
+}
+
+interface SitioEducativo {
+  nombre: string;
+  url: string;
+  descripcion: string;
+  tipo: string;
+}
+
+interface HerramientaPractica {
+  nombre: string;
+  url?: string;
+  descripcion: string;
+  tipo: string;
+}
+
+interface Certificacion {
+  nombre: string;
+  proveedor: string;
+  url?: string;
+  duracion: string;
+  costo: string;
+  descripcion: string;
+}
+
+interface ComunidadAprendizaje {
+  nombre: string;
+  plataforma: string;
+  url: string;
+  descripcion: string;
+  miembros?: string;
+}
+
+interface PasoAprendizaje {
+  paso: number;
+  titulo: string;
+  descripcion: string;
+  duracionEstimada: string;
+  recursos: string[];
+}
+
+interface LearningResourcesData {
+  success: boolean;
+  searchQuery: string;
+  twinId: string;
+  learningResources: {
+    topic: string;
+    onlineCourses: CursoOnline[];
+    recommendedBooks: LibroRecomendado[];
+    videoTutorials: VideoTutorial[];
+    educationalWebsites: SitioEducativo[];
+    practiceTools: HerramientaPractica[];
+    certifications: Certificacion[];
+    communities: ComunidadAprendizaje[];
+    learningPath: PasoAprendizaje[];
+    keywords: string[];
+    summary: string;
+    htmlContent: string;
+  };
+  statistics?: any;
+  processedAt: string;
+  message: string;
+}
+
+interface LearningResourcesReviewModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  resourcesData: LearningResourcesData | null;
+  onAccept: () => void;
+  onReject: () => void;
+  isViewOnly?: boolean;
+}
+
+const LearningResourcesReviewModal: React.FC<LearningResourcesReviewModalProps> = ({
+  isOpen,
+  onClose,
+  resourcesData,
+  onAccept,
+  onReject,
+  isViewOnly = false
+}) => {
+  const [expandedSections, setExpandedSections] = useState<string[]>(['summary']);
+  const [selectedResources, setSelectedResources] = useState<string[]>([]);
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev =>
+      prev.includes(section)
+        ? prev.filter(s => s !== section)
+        : [...prev, section]
+    );
+  };
+
+  const toggleResourceSelection = (resourceType: string) => {
+    setSelectedResources(prev =>
+      prev.includes(resourceType)
+        ? prev.filter(r => r !== resourceType)
+        : [...prev, resourceType]
+    );
+  };
+
+  const handleAccept = () => {
+    if (!resourcesData) return;
+    
+    // Simplemente llamar la función onAccept, los datos ya están disponibles
+    onAccept();
+  };
+
+  if (!isOpen || !resourcesData) return null;
+
+  const { learningResources } = resourcesData;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+      <Card className="w-full max-w-6xl max-h-[95vh] overflow-y-auto">
+        <CardHeader className="bg-gradient-to-r from-green-600 to-blue-600 text-white p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle className="text-lg sm:text-xl flex items-center gap-3">
+              <CheckCircle2 className="w-6 h-6" />
+              <div>
+                <div>{isViewOnly ? 'Recursos de Aprendizaje Guardados' : 'Recursos de Aprendizaje Encontrados'}</div>
+                <div className="text-sm font-normal opacity-90 mt-1">
+                  {learningResources.topic}
+                </div>
+              </div>
+            </CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="text-white hover:bg-white/20"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-4 sm:p-6 space-y-4">
+          {/* Resumen */}
+          <Card className="border-green-200">
+            <CardHeader 
+              className="cursor-pointer bg-green-50 hover:bg-green-100 transition-colors"
+              onClick={() => toggleSection('summary')}
+            >
+              <CardTitle className="text-base flex items-center gap-2">
+                {expandedSections.includes('summary') ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                📋 Resumen General
+                <Badge variant="secondary">{learningResources.summary ? 'Disponible' : 'No disponible'}</Badge>
+              </CardTitle>
+            </CardHeader>
+            {expandedSections.includes('summary') && (
+              <CardContent className="pt-4">
+                <p className="text-sm text-gray-700">{learningResources.summary}</p>
+                <div className="mt-3">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedResources.includes('summary')}
+                      onChange={() => toggleResourceSelection('summary')}
+                      className="rounded"
+                    />
+                    <span className="text-sm">Incluir resumen en el aprendizaje</span>
+                  </label>
+                </div>
+              </CardContent>
+            )}
+          </Card>
+
+          {/* Cursos Online */}
+          {learningResources.onlineCourses.length > 0 && (
+            <Card className="border-blue-200">
+              <CardHeader 
+                className="cursor-pointer bg-blue-50 hover:bg-blue-100 transition-colors"
+                onClick={() => toggleSection('courses')}
+              >
+                <CardTitle className="text-base flex items-center gap-2">
+                  {expandedSections.includes('courses') ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  🎓 Cursos Online
+                  <Badge variant="secondary">{learningResources.onlineCourses.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              {expandedSections.includes('courses') && (
+                <CardContent className="pt-4 space-y-3">
+                  {learningResources.onlineCourses.map((curso, index) => (
+                    <div key={index} className="border rounded-lg p-3 bg-gray-50">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-sm">{curso.titulo}</h4>
+                          <p className="text-sm text-gray-600">{curso.plataforma}</p>
+                          <div className="flex gap-2 mt-2">
+                            <Badge variant="outline" className="text-xs">{curso.nivel}</Badge>
+                            <Badge variant="outline" className="text-xs">
+                              <Clock className="w-3 h-3 mr-1" />
+                              {curso.duracion}
+                            </Badge>
+                            {curso.precio && <Badge variant="outline" className="text-xs">{curso.precio}</Badge>}
+                          </div>
+                        </div>
+                        {curso.url && (
+                          <Button size="sm" variant="ghost" asChild>
+                            <a href={curso.url} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="mt-3">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedResources.includes('courses')}
+                        onChange={() => toggleResourceSelection('courses')}
+                        className="rounded"
+                      />
+                      <span className="text-sm">Incluir cursos online en el aprendizaje</span>
+                    </label>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          )}
+
+          {/* Libros Recomendados */}
+          {learningResources.recommendedBooks.length > 0 && (
+            <Card className="border-purple-200">
+              <CardHeader 
+                className="cursor-pointer bg-purple-50 hover:bg-purple-100 transition-colors"
+                onClick={() => toggleSection('books')}
+              >
+                <CardTitle className="text-base flex items-center gap-2">
+                  {expandedSections.includes('books') ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  📚 Libros Recomendados
+                  <Badge variant="secondary">{learningResources.recommendedBooks.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              {expandedSections.includes('books') && (
+                <CardContent className="pt-4 space-y-3">
+                  {learningResources.recommendedBooks.map((libro, index) => (
+                    <div key={index} className="border rounded-lg p-3 bg-gray-50">
+                      <h4 className="font-semibold text-sm">{libro.titulo}</h4>
+                      <p className="text-sm text-gray-600">por {libro.autor}</p>
+                      <p className="text-sm mt-1">{libro.descripcion}</p>
+                      <Badge variant="outline" className="text-xs mt-2">{libro.nivel}</Badge>
+                    </div>
+                  ))}
+                  <div className="mt-3">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedResources.includes('books')}
+                        onChange={() => toggleResourceSelection('books')}
+                        className="rounded"
+                      />
+                      <span className="text-sm">Incluir libros recomendados en el aprendizaje</span>
+                    </label>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          )}
+
+          {/* Ruta de Aprendizaje */}
+          {learningResources.learningPath.length > 0 && (
+            <Card className="border-orange-200">
+              <CardHeader 
+                className="cursor-pointer bg-orange-50 hover:bg-orange-100 transition-colors"
+                onClick={() => toggleSection('path')}
+              >
+                <CardTitle className="text-base flex items-center gap-2">
+                  {expandedSections.includes('path') ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  🗺️ Ruta de Aprendizaje
+                  <Badge variant="secondary">{learningResources.learningPath.length} pasos</Badge>
+                </CardTitle>
+              </CardHeader>
+              {expandedSections.includes('path') && (
+                <CardContent className="pt-4 space-y-3">
+                  {learningResources.learningPath.map((paso, index) => (
+                    <div key={index} className="border rounded-lg p-3 bg-gray-50 flex gap-3">
+                      <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                        {paso.paso}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-sm">{paso.titulo}</h4>
+                        <p className="text-sm text-gray-600 mt-1">{paso.descripcion}</p>
+                        <Badge variant="outline" className="text-xs mt-2">
+                          <Clock className="w-3 h-3 mr-1" />
+                          {paso.duracionEstimada}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="mt-3">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedResources.includes('path')}
+                        onChange={() => toggleResourceSelection('path')}
+                        className="rounded"
+                      />
+                      <span className="text-sm">Incluir ruta de aprendizaje en el aprendizaje</span>
+                    </label>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          )}
+
+          {/* Palabras Clave */}
+          {learningResources.keywords.length > 0 && (
+            <Card className="border-gray-200">
+              <CardHeader 
+                className="cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors"
+                onClick={() => toggleSection('keywords')}
+              >
+                <CardTitle className="text-base flex items-center gap-2">
+                  {expandedSections.includes('keywords') ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  🏷️ Palabras Clave
+                  <Badge variant="secondary">{learningResources.keywords.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              {expandedSections.includes('keywords') && (
+                <CardContent className="pt-4">
+                  <div className="flex flex-wrap gap-2">
+                    {learningResources.keywords.map((keyword, index) => (
+                      <Badge key={index} variant="outline" className="text-xs">
+                        {keyword}
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="mt-3">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedResources.includes('keywords')}
+                        onChange={() => toggleResourceSelection('keywords')}
+                        className="rounded"
+                      />
+                      <span className="text-sm">Incluir palabras clave en el aprendizaje</span>
+                    </label>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          )}
+
+          {/* Contenido HTML Completo */}
+          {learningResources.htmlContent && (
+            <Card className="border-indigo-200">
+              <CardHeader className="bg-indigo-50">
+                <CardTitle className="text-base flex items-center gap-2">
+                  ✨ Contenido Completo Generado por AI
+                  <Badge variant="secondary">HTML</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <p className="text-sm text-gray-600 mb-3">
+                  El AI ha generado un contenido completo y estructurado para tu aprendizaje.
+                </p>
+                <div className="mt-3">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedResources.includes('htmlContent')}
+                      onChange={() => toggleResourceSelection('htmlContent')}
+                      className="rounded"
+                    />
+                    <span className="text-sm font-medium">Usar contenido completo generado por AI (reemplazará el contenido actual)</span>
+                  </label>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Botones de acción */}
+          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
+            {!isViewOnly && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                <p className="text-sm text-blue-800">
+                  <strong>💡 Nota:</strong> Estos recursos se guardarán como datos estructurados junto a tu aprendizaje. 
+                  El contenido original se mantendrá intacto y podrás acceder a estos recursos adicionales cuando los necesites.
+                </p>
+              </div>
+            )}
+            
+            {isViewOnly ? (
+              <Button
+                onClick={onClose}
+                className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+              >
+                Cerrar
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={onReject}
+                  className="w-full sm:w-auto"
+                >
+                  Rechazar
+                </Button>
+                <Button
+                  onClick={handleAccept}
+                  className="w-full sm:w-auto bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white"
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Guardar Recursos en el Aprendizaje
+                </Button>
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default LearningResourcesReviewModal;

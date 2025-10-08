@@ -22,7 +22,9 @@ import {
     Network,
     Bot,
     Brain,
-    GraduationCap
+    GraduationCap,
+    Archive,
+    Search
 } from "lucide-react";
 import { LoginButton, LogoutButton } from "@/components/LoginButton";
 import { useMsal } from "@azure/msal-react";
@@ -34,6 +36,7 @@ const MainLayout: React.FC = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [showTokenDetails, setShowTokenDetails] = useState(false);
     const [twinProfile, setTwinProfile] = useState<TwinProfileResponse | null>(null);
+    const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
     const [loadingTwin, setLoadingTwin] = useState(false);
     const [twinLoadAttempted, setTwinLoadAttempted] = useState(false); // New flag to prevent infinite loops
     const [showProfileModal, setShowProfileModal] = useState(false); // New state for profile modal
@@ -76,6 +79,7 @@ const MainLayout: React.FC = () => {
         if (msalUser) {
             setTwinLoadAttempted(false);
             setTwinProfile(null);
+            setSubscriptionId(null); // Reset subscription ID
         }
     }, [msalUser?.localAccountId]); // Reset when user account changes
 
@@ -114,7 +118,16 @@ const MainLayout: React.FC = () => {
                     const result = await twinApiService.getTwinByIdentifier(twinId);
                     if (result.success && result.data) {
                         console.log('✅ MainLayout: Twin profile loaded:', result.data);
+                        console.log('🔍 MainLayout: Checking subscriptionId in profile:', result.data.subscriptionId);
                         setTwinProfile(result.data);
+                        
+                        // Set subscriptionId if available
+                        if (result.data.subscriptionId) {
+                            console.log('🆔 MainLayout: Setting subscriptionId from profile:', result.data.subscriptionId);
+                            setSubscriptionId(result.data.subscriptionId);
+                        } else {
+                            console.log('⚠️ MainLayout: No subscriptionId found in profile data');
+                        }
                     } else {
                         console.log('ℹ️ MainLayout: Twin profile not found or error:', result.error);
                         // Try to create Twin from claims if it doesn't exist
@@ -123,6 +136,12 @@ const MainLayout: React.FC = () => {
                         if (createResult.success && createResult.data) {
                             console.log('✅ MainLayout: Twin created/loaded successfully:', createResult.data);
                             setTwinProfile(createResult.data);
+                            
+                            // Set subscriptionId if available
+                            if (createResult.data.subscriptionId) {
+                                console.log('🆔 MainLayout: Setting subscriptionId from created profile:', createResult.data.subscriptionId);
+                                setSubscriptionId(createResult.data.subscriptionId);
+                            }
                         } else {
                             console.error('❌ MainLayout: Failed to create/load Twin:', createResult.error);
                         }
@@ -145,6 +164,7 @@ const MainLayout: React.FC = () => {
     const refreshTwinProfile = async () => {
         if (msalUser && !loadingTwin) {
             setTwinProfile(null); // Clear current profile to trigger reload
+            setSubscriptionId(null); // Clear subscription ID
         }
     };
 
@@ -164,14 +184,24 @@ const MainLayout: React.FC = () => {
         setLoadingTwin(true);
         
         try {
-            // Use smart lookup that automatically determines if it's UUID or name
+            // Use the same method that works for automatic loading - getTwinByIdentifier
+            console.log('📞 Calling getTwinByIdentifier (same as auto-load) with ID:', twinId);
             const result = await twinApiService.getTwinByIdentifier(twinId);
+            
+            console.log('📊 Raw API response:', result);
+            
             if (result.success && result.data) {
-                console.log('✅ Twin profile loaded for modal:', result.data);
+                console.log('✅ Twin profile response received:', result.data);
                 setTwinProfile(result.data);
+                
+                // Set subscriptionId if available
+                if (result.data.subscriptionId) {
+                    console.log('🆔 Setting subscriptionId from profile:', result.data.subscriptionId);
+                    setSubscriptionId(result.data.subscriptionId);
+                }
             } else {
                 console.error('❌ Twin profile not found for modal:', result.error);
-                setTwinProfile(null); // Clear any existing profile to show error message
+                setTwinProfile(null);
             }
         } catch (error) {
             console.error('❌ Error loading Twin profile for modal:', error);
@@ -207,6 +237,12 @@ const MainLayout: React.FC = () => {
                     label: "Mi Conocimiento",
                     icon: Brain,
                     path: "/mi-conocimiento"
+                },
+                {
+                    id: "mi-memoria",
+                    label: "Mi Memoria",
+                    icon: Archive,
+                    path: "/mi-memoria"
                 }
             ]
         },
@@ -228,6 +264,12 @@ const MainLayout: React.FC = () => {
                     label: "Chat con voz",
                     icon: Mic,
                     path: "/chat-voice"
+                },
+                {
+                    id: "ai-web-search",
+                    label: "AI Web Search",
+                    icon: Search,
+                    path: "/ai-web-search"
                 }
             ]
         },
@@ -322,6 +364,7 @@ const MainLayout: React.FC = () => {
             // Twin Agents Net
             "chat-mi-twin": "text-cyan-300 hover:text-cyan-200",
             "chat-voz": "text-sky-400 hover:text-sky-300",
+            "ai-web-search": "text-blue-400 hover:text-blue-300",
             
             // Mi Familia
             "crear-twin-familiar": "text-purple-300 hover:text-purple-200",
@@ -367,20 +410,29 @@ const MainLayout: React.FC = () => {
                         ${isMobile ? "fixed h-full" : "relative"}
                         ${isMobile && !sidebarOpen ? "-translate-x-full" : "translate-x-0"}
                     `}>
-                        <div className="flex flex-col px-2 py-3 border-b border-gray-800 h-16 md:h-20 justify-center">
-                            <div className="flex items-center justify-between">
-                                <span className={`font-bold text-base md:text-lg transition-all duration-300 ${sidebarOpen ? "block" : "hidden"}`}>
+                        <div className="flex flex-col px-2 py-4 border-b border-gray-800 h-20 md:h-24 justify-center">
+                            <div className="flex items-center justify-between mb-1">
+                                <span className={`font-bold text-base md:text-lg text-white transition-all duration-300 ${sidebarOpen ? "block" : "hidden"}`}>
                                     TwinAgent
                                 </span>
-                                <button onClick={toggleSidebar} className="text-gray-400 hover:text-white p-1">
+                                <button onClick={toggleSidebar} className="text-gray-300 hover:text-white p-1 rounded hover:bg-gray-700 transition-colors">
                                     {sidebarOpen ? <X size={isMobile ? 20 : 24} /> : <Menu size={isMobile ? 20 : 24} />}
                                 </button>
                             </div>
                             {sidebarOpen && (
-                                <div className="mt-2 text-xs text-gray-300">
-                                    <span className="font-semibold">Twin User ID:</span>
-                                    <br />
-                                    <span className="break-all">{msalUser?.username || "No autenticado"}</span>
+                                <div className="mt-1 text-xs text-gray-200 leading-tight">
+                                    <div className="mb-1">
+                                        <span className="font-semibold text-gray-100">Twin User ID:</span>
+                                        <br />
+                                        <span className="break-all text-gray-300">{msalUser?.username || "No autenticado"}</span>
+                                    </div>
+                                    {subscriptionId && (
+                                        <div>
+                                            <span className="font-semibold text-yellow-200">Subscription ID:</span>
+                                            <br />
+                                            <span className="break-all text-yellow-100">{subscriptionId}</span>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -537,6 +589,12 @@ const MainLayout: React.FC = () => {
                                             <strong className="text-blue-700">ID:</strong>
                                             <p className="text-blue-600 break-all text-xs">{twinProfile.id}</p>
                                         </div>
+                                        {twinProfile.subscriptionId && (
+                                            <div className="sm:col-span-2 lg:col-span-1">
+                                                <strong className="text-blue-700">Subscription ID:</strong>
+                                                <p className="text-blue-600 break-all text-xs">{twinProfile.subscriptionId}</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}

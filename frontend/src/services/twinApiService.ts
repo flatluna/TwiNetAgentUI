@@ -200,6 +200,7 @@ export interface ResumeListResponse {
 
 export interface TwinProfileData {
     twinId?: string; // Add twinId field for backend compatibility
+    subscriptionId?: string; // Subscription ID field for display
     twinName: string;
     firstName: string;
     lastName: string;
@@ -675,6 +676,28 @@ class TwinApiService {
     }
 
     /**
+     * Get Twin profile for modal display - uses the GetTwinProfilesByTwinId endpoint
+     * GET /api/twin-profiles/twinid/{twinId}
+     * Returns the complete backend response with profiles as a single object
+     */
+    async getTwinProfileForModal(twinId: string): Promise<ApiResponse<{
+        success: boolean;
+        profiles: TwinProfileResponse;
+        totalCount: number;
+        twinId: string;
+        message: string;
+    }>> {
+        console.log('🔍 Getting twin profile for modal using GetTwinProfilesByTwinId endpoint, TwinId:', twinId);
+        return this.makeRequest<{
+            success: boolean;
+            profiles: TwinProfileResponse;
+            totalCount: number;
+            twinId: string;
+            message: string;
+        }>(`/api/twin-profiles/twinid/${encodeURIComponent(twinId)}`);
+    }
+
+    /**
      * Update a Twin profile by ID
      * PUT /api/twin-profiles/id/{twin_id}
      */
@@ -723,11 +746,33 @@ class TwinApiService {
     }
 
     /**
+     * Get Twin profiles by specific Twin ID (for authenticated user)
+     * GET /api/twin-profiles/twinid/{twinId}
+     * Note: Backend returns profiles as a single object (profiles[0]), not an array
+     */
+    async getTwinProfilesByTwinId(twinId: string): Promise<ApiResponse<{
+        success: boolean;
+        profiles: TwinProfileResponse;
+        totalCount: number;
+        twinId: string;
+        message: string;
+    }>> {
+        console.log('🔍 Getting twin profiles for TwinId:', twinId);
+        return this.makeRequest<{
+            success: boolean;
+            profiles: TwinProfileResponse;
+            totalCount: number;
+            twinId: string;
+            message: string;
+        }>(`/api/twin-profiles/twinid/${encodeURIComponent(twinId)}`);
+    }
+
+    /**
      * Get all Twin profiles
-     * GET /api/twin-profiles
+     * GET /api/twin-profiles/all
      */
     async getAllTwins(): Promise<ApiResponse<TwinProfileResponse[]>> {
-        return this.makeRequest<TwinProfileResponse[]>('/api/twin-profiles');
+        return this.makeRequest<TwinProfileResponse[]>('/api/twin-profiles/all');
     }
 
     // Legacy methods for backward compatibility - DEPRECATED

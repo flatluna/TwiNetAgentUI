@@ -4,6 +4,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import AuthRedirectHandler from "@/components/AuthRedirectHandler";
 import DashboardPage from "@/pages/DashboardPage";
 import TwinManagePage from "@/pages/TwinManagePage";
+import CursosHomePage from '@/pages/conocimiento/CursosHomePage';
 import TwinBiografiaPage from "@/pages/TwinBiografiaPage";
 import FotosFamiliaresPage from "@/pages/biografia/FotosFamiliaresPage";
 import DatosPersonalesPage from "@/pages/biografia/DatosPersonalesPage";
@@ -40,6 +41,7 @@ import MisTwinsPage from "@/pages/MisTwinsPage";
 import ConfiguracionPage from "@/pages/ConfiguracionPage";
 import ChatVoicePage from "@/pages/ChatVoicePage";
 import TwinAgentPage from "@/pages/TwinAgentPage";
+import AIWebSearchPage from "@/pages/AIWebSearchPage";
 import TwinCasaPage from "@/pages/TwinCasaPage";
 import CasasPage from "@/pages/CasasPage";
 import CrearCasaPage from "@/pages/CrearCasaPage";
@@ -52,11 +54,22 @@ import CrearVehiculoPage from "@/pages/CrearVehiculoPage";
 import EditarVehiculoPage from "@/pages/EditarVehiculoPage";
 import VehiculoDetallesPage from "@/pages/VehiculoDetallesPage";
 import MiConocimientoPage from "@/pages/MiConocimientoPage";
+import MiMemoriaPage from "@/pages/MiMemoriaPage";
+import MemoriaFotosPage from "@/pages/MemoriaFotosPage";
 import LibrosPage from "@/pages/LibrosPage";
-import CursosPage from "@/pages/CursosPage";
+import HabilidadesPage from "@/pages/HabilidadesPage";
+import NuevoAprendiPage from "@/pages/NuevoAprendiPage";
+// import CursosPage from "@/pages/CursosPage";
 import AgregarLibroPage from "@/pages/AgregarLibroPage";
 import AgregarCursoPage from "@/pages/AgregarCursoPage";
 import AgregarCursoConDocumentoPage from "@/pages/AgregarCursoConDocumentoPage";
+import CrearCursoAIPage from '@/pages/conocimiento/CrearCursoAIPage';
+import CursosManualPage from '@/pages/conocimiento/CursosManualPage';
+import CursosDocumentoPage from '@/pages/conocimiento/CursosDocumentoPage';
+import CursosAIPage from '@/pages/conocimiento/CursosAIPage';
+import VerDetallesCapituloAIPage from "@/pages/conocimiento/VerDetallesCapituloAIPage";
+import DetallesCursoAIPage from "@/pages/conocimiento/DetallesCursoAIPage";
+import VerCapituloAIDetail from '@/pages/conocimiento/VerCapituloAIDetail';
 import EditarLibroPage from "@/pages/EditarLibroPage";
 import EditarCursoPage from "@/pages/EditarCursoPage";
 import DetallesCursoPage from "@/pages/conocimiento/DetallesCursoPage";
@@ -66,7 +79,6 @@ import VerCapitulosAIPage from '@/pages/conocimiento/VerCapitulosAIPage';
 import AgregarEditarCapituloPage from "@/pages/conocimiento/AgregarEditarCapituloPage";
 import NotebooksCapituloPage from "@/pages/conocimiento/NotebooksCapituloPage";
 import VerDetallesCapituloPage from "@/pages/conocimiento/VerDetallesCapituloPage";
-import VerDetallesCapituloAIPage from "@/pages/conocimiento/VerDetallesCapituloAIPage";
 import BookNotesPage from "@/pages/BookNotesPage";
 import AnalisisAIPage from "@/pages/AnalisisAIPage";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -108,6 +120,22 @@ const router = createBrowserRouter([
                 element: <ProtectedRoute><MiConocimientoPage /></ProtectedRoute>,
             },
             {
+                path: "mi-memoria",
+                element: <ProtectedRoute><MiMemoriaPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-memoria/:memoriaId/fotos",
+                element: <ProtectedRoute><MemoriaFotosPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/habilidades",
+                element: <ProtectedRoute><HabilidadesPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/habilidades/nuevo-aprendi/:id",
+                element: <ProtectedRoute><NuevoAprendiPage /></ProtectedRoute>,
+            },
+            {
                 path: "mi-conocimiento/libros",
                 element: <ProtectedRoute><LibrosPage /></ProtectedRoute>,
             },
@@ -125,15 +153,31 @@ const router = createBrowserRouter([
             },
             {
                 path: "mi-conocimiento/cursos",
-                element: <ProtectedRoute><CursosPage /></ProtectedRoute>,
+                element: <ProtectedRoute><CursosHomePage /></ProtectedRoute>,
             },
             {
                 path: "mi-conocimiento/cursos/agregar",
                 element: <ProtectedRoute><AgregarCursoPage /></ProtectedRoute>,
             },
             {
+                path: "mi-conocimiento/cursos/manual",
+                element: <ProtectedRoute><CursosManualPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos/agregar-ai",
+                element: <ProtectedRoute><CrearCursoAIPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos/documento",
+                element: <ProtectedRoute><CursosDocumentoPage /></ProtectedRoute>,
+            },
+            {
                 path: "mi-conocimiento/cursos/agregar-documento",
                 element: <ProtectedRoute><AgregarCursoConDocumentoPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos/ai",
+                element: <ProtectedRoute><CursosAIPage /></ProtectedRoute>,
             },
             {
                 path: "mi-conocimiento/cursos/editar/:cursoId",
@@ -175,6 +219,16 @@ const router = createBrowserRouter([
             {
                 path: "mi-conocimiento/cursosAI/:cursoId/capitulos/:capituloId/detalles",
                 element: <ProtectedRoute><VerDetallesCapituloAIPage /></ProtectedRoute>,
+            },
+            // New overview route that uses the DetallesCursoAIPage (reads cursoAI from location.state)
+            {
+                path: "mi-conocimiento/cursosAI/overview/:cursoId",
+                element: <ProtectedRoute><DetallesCursoAIPage /></ProtectedRoute>,
+            },
+            // New AI chapter detail route (reads capitulo from location.state)
+            {
+                path: "mi-conocimiento/cursosAI/:cursoId/capitulos/:capIdx/ai-detalle",
+                element: <ProtectedRoute><VerCapituloAIDetail /></ProtectedRoute>,
             },
             {
                 path: "twin-biografia/fotos",
@@ -323,6 +377,10 @@ const router = createBrowserRouter([
             {
                 path: "twin-agent",
                 element: <ProtectedRoute><TwinAgentPage /></ProtectedRoute>,
+            },
+            {
+                path: "ai-web-search",
+                element: <ProtectedRoute><AIWebSearchPage /></ProtectedRoute>,
             },
             {
                 path: "mi-patrimonio/twin-hogar",

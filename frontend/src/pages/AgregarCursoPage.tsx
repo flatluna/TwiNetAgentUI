@@ -914,13 +914,17 @@ const AgregarCursoPage: React.FC = () => {
                       onChange={(e) => handleInputChange('language', e.target.value)}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
+                      {/* Top 10 idiomas - valores como nombre legible para compatibilidad con el resto del formulario */}
                       <option value="Español">Español</option>
                       <option value="English">English</option>
+                      <option value="中文">中文 (Chinese)</option>
+                      <option value="हिन्दी">हिन्दी (Hindi)</option>
+                      <option value="العربية">العربية (Arabic)</option>
                       <option value="Français">Français</option>
-                      <option value="Deutsch">Deutsch</option>
-                      <option value="Italiano">Italiano</option>
+                      <option value="Русский">Русский (Russian)</option>
                       <option value="Português">Português</option>
-                      <option value="Otro">Otro</option>
+                      <option value="Deutsch">Deutsch</option>
+                      <option value="日本語">日本語 (Japanese)</option>
                     </select>
                   </div>
 

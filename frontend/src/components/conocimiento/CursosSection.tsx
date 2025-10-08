@@ -24,12 +24,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CursoStatus, CursoType } from '@/types/conocimiento';
+import CursoAIPageCard from '@/components/conocimiento/CursoAIPageCard';
 import { useNavigate } from 'react-router-dom';
 import { useTwinId } from '@/hooks/useTwinId';
 import { obtenerCursosDelBackend, obtenerCursosAIDelBackend } from '@/services/courseService';
 
 interface CursosSectionProps {
   searchTerm?: string;
+  // onlyTipo: 'manual' | 'ai' | 'document' will filter the rendered list and stats
+  onlyTipo?: 'manual' | 'ai' | 'document';
+  // If provided, use these CursosAI instead of fetching them (useful for pages that want to supply the exact GET response)
+  externalCursosAI?: any[];
 }
 
 // Interfaz temporal para mapear DetalleCurso a Curso
@@ -60,7 +65,7 @@ interface CursoMapeado {
   progreso?: number;
 }
 
-const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
+const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '', onlyTipo, externalCursosAI }) => {
   const navigate = useNavigate();
   const { twinId, loading: twinIdLoading, error: twinIdError } = useTwinId();
   
@@ -107,52 +112,89 @@ const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
   // Función para cargar cursos del backend
   const cargarCursos = async () => {
     if (!twinId) return;
-    
+    // If the parent supplied externalCursosAI and we're in an AI/document view, use it directly
+    if ((onlyTipo === 'ai' || onlyTipo === 'document') && externalCursosAI && Array.isArray(externalCursosAI)) {
+      console.log('📥 Usando externalCursosAI pasado por la página padre, tamaño:', externalCursosAI.length);
+      setCursosAI(externalCursosAI);
+      setCursos([]);
+      return;
+    }
+
     setLoading(true);
     setError(null);
-    
+
     try {
-      console.log('🔄 Cargando cursos para TwinId:', twinId);
-      
-      // Cargar cursos normales y CursosAI en paralelo
-      const [responseCursos, responseCursosAI] = await Promise.allSettled([
-        obtenerCursosDelBackend(twinId),
-        obtenerCursosAIDelBackend(twinId)
-      ]);
-      
-      // Procesar cursos normales
-      if (responseCursos.status === 'fulfilled') {
-        console.log('🔍 Respuesta cursos normales:', responseCursos.value);
-        
-        if (responseCursos.value.success && responseCursos.value.cursos && Array.isArray(responseCursos.value.cursos)) {
-          const cursosMapeados = responseCursos.value.cursos.map(mapearCursoBackend);
+      console.log('🔄 Cargando cursos para TwinId:', twinId, 'onlyTipo:', onlyTipo);
+
+      // Decide which endpoints to call depending on onlyTipo
+      if (onlyTipo === 'manual') {
+        // Only fetch normal/manual courses
+        const response = await obtenerCursosDelBackend(twinId);
+        if (response && response.success && Array.isArray(response.cursos)) {
+          const cursosMapeados = response.cursos.map(mapearCursoBackend);
           setCursos(cursosMapeados);
-          console.log('✅ Cursos normales cargados y mapeados:', cursosMapeados);
+          setCursosAI([]);
+          console.log('✅ Cursos normales cargados y mapeados (only manual):', cursosMapeados);
         } else {
           setCursos([]);
-          console.log('📝 No se encontraron cursos normales o formato incorrecto');
+          setCursosAI([]);
+          console.log('📝 No se encontraron cursos normales o formato incorrecto (only manual)');
         }
-      } else {
-        console.error('❌ Error al cargar cursos normales:', responseCursos.reason);
-        setCursos([]);
-      }
 
-      // Procesar CursosAI
-      if (responseCursosAI.status === 'fulfilled') {
-        console.log('🤖 Respuesta CursosAI:', responseCursosAI.value);
-        
-        if (responseCursosAI.value.success && responseCursosAI.value.cursos && Array.isArray(responseCursosAI.value.cursos)) {
-          setCursosAI(responseCursosAI.value.cursos);
-          console.log('✅ CursosAI cargados:', responseCursosAI.value.cursos);
+      } else if (onlyTipo === 'ai' || onlyTipo === 'document') {
+        // For AI or Document views, fetch only the CursosAI endpoint and use it to populate cursosAI
+        const responseAI = await obtenerCursosAIDelBackend(twinId);
+        if (responseAI && responseAI.success && Array.isArray(responseAI.cursos)) {
+          setCursosAI(responseAI.cursos);
+          setCursos([]);
+          console.log('✅ CursosAI cargados (only ai/document):', responseAI.cursos);
         } else {
           setCursosAI([]);
-          console.log('🤖 No se encontraron CursosAI o formato incorrecto');
+          setCursos([]);
+          console.log('🤖 No se encontraron CursosAI o formato incorrecto (only ai/document)');
         }
+
       } else {
-        console.error('❌ Error al cargar CursosAI:', responseCursosAI.reason);
-        setCursosAI([]);
+        // General view: load both in parallel
+        const [responseCursos, responseCursosAI] = await Promise.allSettled([
+          obtenerCursosDelBackend(twinId),
+          obtenerCursosAIDelBackend(twinId)
+        ]);
+
+        // Procesar cursos normales
+        if (responseCursos.status === 'fulfilled') {
+          console.log('🔍 Respuesta cursos normales:', responseCursos.value);
+
+          if (responseCursos.value.success && responseCursos.value.cursos && Array.isArray(responseCursos.value.cursos)) {
+            const cursosMapeados = responseCursos.value.cursos.map(mapearCursoBackend);
+            setCursos(cursosMapeados);
+            console.log('✅ Cursos normales cargados y mapeados:', cursosMapeados);
+          } else {
+            setCursos([]);
+            console.log('📝 No se encontraron cursos normales o formato incorrecto');
+          }
+        } else {
+          console.error('❌ Error al cargar cursos normales:', responseCursos.reason);
+          setCursos([]);
+        }
+
+        // Procesar CursosAI
+        if (responseCursosAI.status === 'fulfilled') {
+          console.log('🤖 Respuesta CursosAI:', responseCursosAI.value);
+
+          if (responseCursosAI.value.success && responseCursosAI.value.cursos && Array.isArray(responseCursosAI.value.cursos)) {
+            setCursosAI(responseCursosAI.value.cursos);
+            console.log('✅ CursosAI cargados:', responseCursosAI.value.cursos);
+          } else {
+            setCursosAI([]);
+            console.log('🤖 No se encontraron CursosAI o formato incorrecto');
+          }
+        } else {
+          console.error('❌ Error al cargar CursosAI:', responseCursosAI.reason);
+          setCursosAI([]);
+        }
       }
-      
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
       setError(errorMessage);
@@ -174,8 +216,8 @@ const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
   const [filtroStatus, setFiltroStatus] = useState<CursoStatus | 'TODOS'>('TODOS');
   const [filtroTipo, setFiltroTipo] = useState<CursoType | 'TODOS'>('TODOS');
 
-  // Combinar y filtrar todos los cursos (normales + AI) 
-  const todosCursosFiltrados = [
+  // Combinar y filtrar todos los cursos (normales + AI)
+  let todosCursosFiltrados = [
     // Cursos normales mapeados con tipo 'normal'
     ...cursos
       .filter(curso => {
@@ -206,15 +248,27 @@ const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
       .map(cursoAI => ({ ...cursoAI, tipoCurso: 'ai' as const }))
   ];
 
+  // If a specific tipo is requested, filter accordingly
+  if (onlyTipo === 'manual') {
+    todosCursosFiltrados = todosCursosFiltrados.filter(c => c.tipoCurso === 'normal');
+  } else if (onlyTipo === 'ai') {
+    // CursosAI that are not document-based
+    todosCursosFiltrados = todosCursosFiltrados.filter(c => c.tipoCurso === 'ai' && !(c.NombreArchivo || c.NumeroPaginas || c.TieneIndice));
+  } else if (onlyTipo === 'document') {
+    // Mostrar los mismos cursos AI que en la vista AI: no filtrar por campos de documento aquí
+    todosCursosFiltrados = todosCursosFiltrados.filter(c => c.tipoCurso === 'ai');
+  }
+
   // Estadísticas
+  // Compute stats based on the filtered list (todosCursosFiltrados)
   const stats = {
-    total: cursos.length + cursosAI.length,
-    completados: cursos.filter(c => c.status === CursoStatus.COMPLETADO).length,
-    enProgreso: cursos.filter(c => c.status === CursoStatus.EN_PROGRESO).length,
-    planificados: cursos.filter(c => c.status === CursoStatus.PLANIFICADO).length,
-    horasTotal: cursos.reduce((total, curso) => total + curso.duracionHoras, 0),
-    certificados: cursos.filter(c => c.certificado && c.status === CursoStatus.COMPLETADO).length,
-    cursosAI: cursosAI.length
+    total: todosCursosFiltrados.length,
+    completados: todosCursosFiltrados.filter((c: any) => c.status === CursoStatus.COMPLETADO).length,
+    enProgreso: todosCursosFiltrados.filter((c: any) => c.status === CursoStatus.EN_PROGRESO).length,
+    planificados: todosCursosFiltrados.filter((c: any) => c.status === CursoStatus.PLANIFICADO).length,
+    horasTotal: todosCursosFiltrados.reduce((total: number, curso: any) => total + (curso.duracionHoras || 0), 0),
+    certificados: todosCursosFiltrados.filter((c: any) => c.certificado && c.status === CursoStatus.COMPLETADO).length,
+    cursosAI: (todosCursosFiltrados.filter((c: any) => c.tipoCurso === 'ai').length)
   };
 
   const getStatusColor = (status: CursoStatus) => {
@@ -253,157 +307,22 @@ const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
     });
   };
 
-  // Función para renderizar una tarjeta de CursoAI
+  // Render AI curso using same Card layout as normal cursos to keep UI consistent
   const renderCursoAICard = (cursoAI: any, index: number) => {
-    const extraerHoras = (duracion: string): number => {
-      const match = duracion?.match(/(\d+)/);
-      return match ? parseInt(match[1]) : 0;
-    };
+    // Map cursoAI to the shape expected by CursoAIPageCard
+    const mapped = {
+      id: cursoAI.id || cursoAI.cursoId || `ai-${index}`,
+      NombreClase: cursoAI.nombreClase || cursoAI.NombreClase || cursoAI.titulo || '',
+      Descripcion: cursoAI.descripcion || cursoAI.Descripcion || cursoAI.resumen || '',
+      DuracionEstimada: cursoAI.duracionEstimada || cursoAI.DuracionEstimada || cursoAI.duracion || '',
+      Etiquetas: cursoAI.etiquetas || cursoAI.Etiquetas || cursoAI.tags || [],
+      TwinID: cursoAI.twinId || cursoAI.TwinID || '',
+      Capitulos: cursoAI.capitulos || cursoAI.Capitulos || []
+    } as any;
 
-    const horas = extraerHoras(cursoAI.duracion || '0');
-    const categorias = cursoAI.etiquetas ? cursoAI.etiquetas.split(', ').slice(0, 3) : [];
-    
-    return (
-      <Card key={`ai-${cursoAI.id || index}`} className="hover:shadow-lg transition-shadow border-l-4 border-l-purple-500 bg-gradient-to-r from-purple-50 to-blue-50">
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <Brain className="w-5 h-5 text-purple-600" />
-                <Badge className="bg-purple-100 text-purple-800 border-purple-200">
-                  Curso AI
-                </Badge>
-              </div>
-              <CardTitle className="text-lg font-semibold text-gray-900 line-clamp-2">
-                {cursoAI.nombreClase || 'Curso AI sin título'}
-              </CardTitle>
-              <div className="flex items-center gap-2 mt-2">
-                <ExternalLink className="w-4 h-4 text-purple-500" />
-                <span className="text-sm text-gray-600">{cursoAI.plataforma || 'AI Platform'}</span>
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Instructor */}
-          <div className="flex items-center gap-2">
-            <User className="w-4 h-4 text-gray-400" />
-            <span className="text-sm text-gray-600">{cursoAI.instructor || 'Twin Class AI'}</span>
-          </div>
-
-          {/* Duración */}
-          {horas > 0 && (
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-600">{horas} horas</span>
-            </div>
-          )}
-
-          {/* Categoría */}
-          {cursoAI.categoria && (
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-600">{cursoAI.categoria}</span>
-            </div>
-          )}
-
-          {/* Precio */}
-          {cursoAI.precio && (
-            <div className="flex items-center gap-2">
-              <Star className="w-4 h-4 text-green-400" />
-              <span className="text-sm font-medium text-green-600">{cursoAI.precio}</span>
-            </div>
-          )}
-
-          {/* Etiquetas */}
-          <div className="flex flex-wrap gap-1">
-            {categorias.map((etiqueta: string, idx: number) => (
-              <Badge key={idx} variant="outline" className="text-xs border-purple-200 text-purple-700">
-                {etiqueta.trim()}
-              </Badge>
-            ))}
-            {cursoAI.etiquetas && cursoAI.etiquetas.split(', ').length > 3 && (
-              <Badge variant="outline" className="text-xs border-purple-200 text-purple-700">
-                +{cursoAI.etiquetas.split(', ').length - 3}
-              </Badge>
-            )}
-          </div>
-
-          {/* Descripción */}
-          {cursoAI.loQueAprendere && (
-            <p className="text-sm text-gray-600 line-clamp-2">
-              {cursoAI.loQueAprendere}
-            </p>
-          )}
-
-          {/* Información del archivo */}
-          {(cursoAI.NombreArchivo || cursoAI.NumeroPaginas) && (
-            <div className="bg-purple-50 rounded-lg p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-purple-600" />
-                <span className="text-sm font-medium text-purple-800">Documento base</span>
-              </div>
-              {cursoAI.NombreArchivo && (
-                <p className="text-xs text-purple-700">{cursoAI.NombreArchivo}</p>
-              )}
-              {cursoAI.NumeroPaginas && (
-                <p className="text-xs text-purple-700">{cursoAI.NumeroPaginas} páginas</p>
-              )}
-              {cursoAI.TieneIndice && cursoAI.PaginaInicioIndice && (
-                <p className="text-xs text-purple-700">
-                  Índice: págs. {cursoAI.PaginaInicioIndice}
-                  {cursoAI.PaginaFinIndice && cursoAI.PaginaFinIndice !== cursoAI.PaginaInicioIndice 
-                    ? ` - ${cursoAI.PaginaFinIndice}` 
-                    : ''
-                  }
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Acciones */}
-          <div className="flex flex-col gap-2 pt-2">
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="flex-1 border-purple-200 text-purple-700 hover:bg-purple-50"
-                onClick={() => navigate(`/mi-conocimiento/cursosAI/editar/${cursoAI.id}`)}
-              >
-                <Edit className="w-4 h-4 mr-1" />
-                Editar
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                className="border-purple-200 text-purple-700 hover:bg-purple-50"
-                onClick={() => navigate(`/mi-conocimiento/cursosAI/detalles/${cursoAI.id}`, {
-                  state: { cursoAI: cursoAI, esAI: true }
-                })}
-              >
-                <Eye className="w-4 h-4 mr-1" />
-                Ver Detalles
-              </Button>
-            </div>
-            <Button 
-              variant="secondary" 
-              size="sm"
-              className="w-full bg-purple-100 text-purple-700 hover:bg-purple-200"
-              onClick={() => {
-                console.log('🚀 Navegando a capítulos de CursoAI:', cursoAI);
-                console.log('📚 Capítulos del CursoAI:', cursoAI.capitulos);
-                navigate(`/mi-conocimiento/cursosAI/${cursoAI.id}/capitulos`, {
-                  state: { cursoAI: cursoAI, esAI: true }
-                });
-              }}
-            >
-              <BookOpenCheck className="w-4 h-4 mr-1" />
-              Ver Capítulos ({cursoAI.capitulos?.length || 0})
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
+    // preserve CursosInternet if present on the backend object (different naming variations)
+    (mapped as any).CursosInternet = cursoAI.CursosInternet || cursoAI.cursosInternet || cursoAI.CursoBusqueda || cursoAI.cursoBusqueda || null;
+    return <CursoAIPageCard key={mapped.id} curso={mapped} />;
   };
 
   // Manejo de estados de carga
@@ -435,7 +354,8 @@ const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
     <div className="space-y-6">
       {/* Header con botón de refresh */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Mis Cursos</h2>
+        {/* Header title changes when viewing a specific tipo */}
+        <h2 className="text-2xl font-bold text-gray-900">{onlyTipo === 'manual' ? 'Cursos Manuales' : onlyTipo === 'document' ? 'Cursos desde Documento' : onlyTipo === 'ai' ? 'Cursos AI' : 'Mis Cursos'}</h2>
         <Button
           variant="outline" 
           size="sm"
@@ -447,6 +367,102 @@ const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
           Actualizar
         </Button>
       </div>
+
+      {/* CTA: show either all three (when on general view) or only the one matching onlyTipo */}
+      {!loading && (
+        <div>
+          { !onlyTipo && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="hover:shadow-lg border-dashed border-2 border-green-200 p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Plus className="w-5 h-5 text-green-600" />
+                    <h3 className="text-lg font-semibold">Agregar Curso</h3>
+                  </div>
+                  <p className="text-sm text-gray-600">Crear un curso manualmente: título, capítulos y contenido paso a paso.</p>
+                </div>
+                <div className="mt-4">
+                  <Button className="bg-green-600 hover:bg-green-700 w-full" onClick={() => navigate('/mi-conocimiento/cursos/agregar')}>Crear curso</Button>
+                </div>
+              </Card>
+
+              <Card className="hover:shadow-lg border-dashed border-2 border-blue-200 p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Upload className="w-5 h-5 text-blue-600" />
+                    <h3 className="text-lg font-semibold">Agregar Curso con Documento</h3>
+                  </div>
+                  <p className="text-sm text-gray-600">Sube un PDF o documento y genera un curso automáticamente a partir del contenido.</p>
+                </div>
+                <div className="mt-4">
+                  <Button className="bg-blue-600 hover:bg-blue-700 w-full" onClick={() => navigate('/mi-conocimiento/cursos/agregar-documento')}>Subir documento</Button>
+                </div>
+              </Card>
+
+              <Card className="hover:shadow-lg border-dashed border-2 border-purple-200 p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Brain className="w-5 h-5 text-purple-600" />
+                    <h3 className="text-lg font-semibold">Agregar Curso con AI</h3>
+                  </div>
+                  <p className="text-sm text-gray-600">Genera un curso usando IA: define tópicos y parámetros, el agente creará la estructura y contenidos.</p>
+                </div>
+                <div className="mt-4">
+                  <Button className="bg-purple-600 hover:bg-purple-700 w-full" onClick={() => navigate('/mi-conocimiento/cursos/agregar-ai')}>Generar con AI</Button>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          { onlyTipo === 'manual' && (
+            <div className="mb-4">
+              <Card className="p-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Crear un curso manualmente</h3>
+                    <p className="text-sm text-gray-600">Título, capítulos y contenido paso a paso.</p>
+                  </div>
+                  <div>
+                    <Button className="bg-green-600 hover:bg-green-700" onClick={() => navigate('/mi-conocimiento/cursos/agregar')}>Crear curso</Button>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          { onlyTipo === 'document' && (
+            <div className="mb-4">
+              <Card className="p-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Generar curso desde documento</h3>
+                    <p className="text-sm text-gray-600">Sube un PDF o documento y genera un curso automáticamente a partir del contenido.</p>
+                  </div>
+                  <div>
+                    <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => navigate('/mi-conocimiento/cursos/agregar-documento')}>Subir documento</Button>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          { onlyTipo === 'ai' && (
+            <div className="mb-4">
+              <Card className="p-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Generar curso con AI</h3>
+                    <p className="text-sm text-gray-600">Define tópicos y parámetros, el agente creará la estructura y contenidos.</p>
+                  </div>
+                  <div>
+                    <Button className="bg-purple-600 hover:bg-purple-700" onClick={() => navigate('/mi-conocimiento/cursos/agregar-ai')}>Generar con AI</Button>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Error de carga */}
       {error && (
@@ -514,18 +530,20 @@ const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
             <div className="text-sm text-gray-600">Certificados</div>
           </CardContent>
         </Card>
-        <Card className="text-center bg-gradient-to-br from-purple-50 to-blue-50 border-purple-200">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-purple-600">{stats.cursosAI}</div>
-            <div className="text-sm text-purple-700 font-medium">Cursos AI</div>
-          </CardContent>
-        </Card>
+        {!onlyTipo && (
+          <Card className="text-center bg-gradient-to-br from-purple-50 to-blue-50 border-purple-200">
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-purple-600">{stats.cursosAI}</div>
+              <div className="text-sm text-purple-700 font-medium">Cursos AI</div>
+            </CardContent>
+          </Card>
+        )}
       </div>
       )}
 
-      {/* Filtros y búsqueda */}
-      {!loading && (
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+  {/* Filtros y búsqueda (ocultos en vistas por tipo) */}
+  {!loading && !onlyTipo && (
+  <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex flex-wrap gap-2">
           <select
             value={filtroStatus}
@@ -552,29 +570,7 @@ const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '' }) => {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2">
-          <Button 
-            className="bg-green-600 hover:bg-green-700"
-            onClick={() => navigate('/mi-conocimiento/cursos/agregar')}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Agregar Curso
-          </Button>
-          
-          <Button 
-            className="bg-blue-600 hover:bg-blue-700"
-            onClick={() => navigate('/mi-conocimiento/cursos/agregar-documento')}
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Agregar Curso con Documento
-          </Button>
-          
-          <Button 
-            className="bg-purple-600 hover:bg-purple-700"
-            onClick={() => navigate('/mi-conocimiento/cursos/agregar-ai')}
-          >
-            <Brain className="w-4 h-4 mr-2" />
-            Agregar Curso con AI
-          </Button>
+          {/* Global add buttons are shown only on the general Cursos view (handled by the wrapper above) */}
         </div>
       </div>
       )}

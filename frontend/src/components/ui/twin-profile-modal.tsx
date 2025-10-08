@@ -27,6 +27,7 @@ export const TwinProfileModal: React.FC<TwinProfileModalProps> = ({
         console.log('🔍 firstName:', profile.firstName);
         console.log('🔍 lastName:', profile.lastName);
         console.log('🔍 email:', profile.email);
+        console.log('🔍 subscriptionId:', profile.subscriptionId);
         console.log('🔍 twinName:', profile.twinName);
         console.log('🔍 id:', profile.id);
         console.log('🔍 createdAt:', profile.createdAt);
@@ -69,6 +70,27 @@ export const TwinProfileModal: React.FC<TwinProfileModalProps> = ({
                         </div>
                     ) : profile ? (
                         <div className="space-y-6">
+                            {/* Subscription ID - Prominent display at top */}
+                            {profile.subscriptionId && (
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="flex-shrink-0">
+                                            <div className="h-8 w-8 bg-yellow-100 dark:bg-yellow-800 rounded-full flex items-center justify-center">
+                                                <span className="text-yellow-600 dark:text-yellow-300 font-semibold text-sm">ID</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                                                Subscription ID
+                                            </p>
+                                            <p className="text-sm text-yellow-700 dark:text-yellow-300 font-mono break-all">
+                                                {profile.subscriptionId}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
                             {/* Basic Info */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-4">
