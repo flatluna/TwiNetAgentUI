@@ -198,6 +198,81 @@ export interface ResumeListResponse {
     totalCount?: number;
 }
 
+// Interfaces para ImageAI - Análisis de fotos familiares con IA
+export interface ImageAI {
+    detailsHTML: string;
+    descripcionGenerica: string;
+    descripcion_visual_detallada: DescripcionVisualDetallada;
+    contexto_emocional: ContextoEmocional;
+    elementos_temporales: ElementosTemporales;
+    detalles_memorables: DetallesMemorables;
+    id?: string;
+    TwinID?: string;
+    url?: string;
+    path?: string;
+    fileName?: string;
+}
+
+export interface DescripcionVisualDetallada {
+    personas: Personas;
+    objetos: Objeto[];
+    escenario: Escenario;
+    colores: Colores;
+}
+
+export interface Personas {
+    cantidad?: number;
+    descripcion?: string;
+    edades_aproximadas?: string[];
+    genero?: string[];
+    vestimenta?: string[];
+    expresiones?: string[];
+    posiciones?: string[];
+}
+
+export interface Objeto {
+    nombre: string;
+    descripcion: string;
+    ubicacion?: string;
+    estado?: string;
+}
+
+export interface Escenario {
+    ubicacion: string;
+    tipo_espacio: string;
+    iluminacion: string;
+    momento_dia?: string;
+    clima?: string;
+    ambiente: string;
+}
+
+export interface Colores {
+    dominantes: string[];
+    secundarios?: string[];
+    paleta_general: string;
+}
+
+export interface ContextoEmocional {
+    ambiente_general: string;
+    emociones_detectadas: string[];
+    energia_nivel: string;
+    formalidad: string;
+}
+
+export interface ElementosTemporales {
+    epoca_estimada?: string;
+    indicadores_temporales: string[];
+    estacion_probable?: string;
+    momento_dia?: string;
+}
+
+export interface DetallesMemorables {
+    elementos_unicos: string[];
+    aspectos_destacados: string[];
+    importancia_estimada: string;
+    valor_sentimental: string;
+}
+
 export interface TwinProfileData {
     twinId?: string; // Add twinId field for backend compatibility
     subscriptionId?: string; // Subscription ID field for display
@@ -983,6 +1058,7 @@ class TwinApiService {
         metadata: {
             description?: string;
             date_taken: string;
+            time_taken?: string; // Added for TimeTaken field
             location?: string;
             country?: string;
             place?: string;
@@ -1000,71 +1076,87 @@ class TwinApiService {
         filename?: string;
         size_bytes?: number;
     }>> {
-        console.log('📷 Uploading family photo with metadata:');
+        console.log('📷 Uploading family photo with new UploadFamilyPhoto endpoint:');
         console.log('  - Twin ID:', twinId);
         console.log('  - File:', file.name, file.size, 'bytes');
         console.log('  - Metadata received:', metadata);
 
         try {
-            // Convert file to base64
-            const photoData = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-
-            // Format metadata to match backend expectations
-            const photoMetadata = {
-                description: metadata.description || '',
-                dateTaken: metadata.date_taken,
-                location: metadata.location || '',
-                peopleInPhoto: metadata.people_in_photo || '',
-                category: "Familia",
-                tags: metadata.tags || '',
-                filePath: `fotos/${metadata.category || 'Familia'}/${(metadata.event_type || 'general').replace(/[^\w\-]/g, '_')}/${file.name.replace(/[^\w\-\.]/g, '_')}`
-            };
+            // Create FormData for multipart/form-data matching PhotoFormData class structure
+            const formData = new FormData();
             
-            console.log('🔍 Photo metadata being sent to backend:', photoMetadata);
-            console.log('📸 Photo data format:', photoData.substring(0, 50) + '...');
-
-            // Create request body matching backend expectations
-            const requestBody = {
-                photoData: photoData, // Full data:image/jpeg;base64,... format
-                metadata: photoMetadata,
-                // Add file information that backend expects
-                fileName: file.name,
-                fileSize: file.size,
-                mimeType: file.type
-            };
-
-            // Use makeRequest for consistent JSON handling
-            const response = await this.makeRequest<{
-                success: boolean;
-                message: string;
-                photo_url: string;
-                photo_id: string;
-                file_path?: string;
-                filename?: string;
-                size_bytes?: number;
-            }>(`/api/twins/${twinId}/upload-photo-with-metadata`, {
-                method: 'POST',
-                body: JSON.stringify(requestBody),
-            });
-
-            if (response.success) {
-                console.log('✅ Photo uploaded successfully:', response.data);
-            } else {
-                console.error('❌ Photo upload failed:', response.error);
+            // Add the actual file
+            formData.append('photo', file, file.name);
+            
+            // Map metadata to PhotoFormData structure exactly as backend expects
+            formData.append('FileName', file.name);
+            formData.append('TimeTaken', metadata.time_taken || ''); // Just the time portion
+            formData.append('Path', ''); // Backend will handle the path
+            formData.append('Description', metadata.description || '');
+            formData.append('DateTaken', metadata.date_taken); // Full date and time
+            formData.append('Location', metadata.location || '');
+            formData.append('Country', metadata.country || '');
+            formData.append('Place', metadata.place || '');
+            formData.append('PeopleInPhoto', metadata.people_in_photo || '');
+            formData.append('Tags', metadata.tags || '');
+            
+            // Convert category to proper enum value (capitalize first letter)
+            const categoryValue = metadata.category || 'familia';
+            const capitalizedCategory = categoryValue.charAt(0).toUpperCase() + categoryValue.slice(1);
+            formData.append('Category', capitalizedCategory); // Use enum value: Familia, Eventos, etc.
+            
+            formData.append('EventType', metadata.event_type || '');
+            
+            // Generate familyId - we'll use a default value or timestamp
+            const familyId = 'default'; // O podrías usar Date.now().toString() si necesitas único
+            
+            console.log('� FormData fields being sent:');
+            for (let [key, value] of formData.entries()) {
+                if (value instanceof File) {
+                    console.log(`  - ${key}: [File] ${value.name} (${value.size} bytes)`);
+                } else {
+                    console.log(`  - ${key}: ${value}`);
+                }
             }
+
+            // Use the new endpoint: UploadFamilyPhoto
+            // POST /api/twins/{twinId}/family/{familyId}/upload-photo
+            const response = await fetch(`${API_BASE_URL}/api/twins/${twinId}/family/${familyId}/upload-photo`, {
+                method: 'POST',
+                body: formData,
+                // NO establecer Content-Type header - FormData lo hace automáticamente con boundary
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text().catch(() => '');
+                let errorMessage = `Error ${response.status}: ${response.statusText}`;
+                
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMessage = errorData.message || errorMessage;
+                } catch {
+                    if (errorText) {
+                        errorMessage = errorText;
+                    }
+                }
+                
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+            console.log('✅ Photo uploaded successfully with UploadFamilyPhoto:', data);
             
-            return response;
+            return {
+                success: true,
+                data: data,
+                error: null
+            };
         } catch (error) {
-            console.error('❌ Error uploading photo:', error);
+            console.error('❌ Error uploading photo with UploadFamilyPhoto:', error);
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'Unknown error',
-                data: undefined
+                data: null,
+                error: error instanceof Error ? error.message : 'Error desconocido al subir la foto'
             };
         }
     }
@@ -1149,27 +1241,31 @@ class TwinApiService {
         twinId: string;
         photos: Array<{
             id: string;
-            TwinID: string;
-            description: string;
-            dateTaken: string;
-            location: string;
-            country: string;
-            place: string;
-            peopleInPhoto: string;
-            category: string;
-            tags: string;
-            filePath: string;
+            twinID: string;
             fileName: string;
-            fileSize: number;
-            mimeType: string;
-            uploadDate: string;
-            type: string;
-            photoUrl: string;
+            url: string; // El backend devuelve 'url', no 'photoUrl'
+            descripcionGenerica?: string;
+            fecha?: string;
+            hora?: string;
+            location?: string;
+            country?: string;
+            place?: string;
+            peopleInPhoto?: string;
+            category?: string;
+            tags?: string;
+            fileSize?: number;
+            // Campos legacy para compatibilidad
+            description?: string;
+            dateTaken?: string;
+            filePath?: string;
+            mimeType?: string;
+            uploadDate?: string;
+            type?: string;
+            photoUrl?: string;
         }>;
         count: number;
-        searchTerm: string | null;
-        category: string | null;
         message: string;
+        retrievedAt: string;
     }>> {
         return this.makeRequest(`/api/twins/${twinId}/family-photos`, {
             method: 'GET'
@@ -2390,6 +2486,69 @@ class TwinApiService {
         return this.makeRequest(`/api/twins/${twinId}/global-documents/categories?${params.toString()}`, {
             method: 'GET'
         });
+    }
+
+    /**
+     * Get all family photos with AI analysis for a Twin
+     */
+    async getFamilyPhotosWithAI(twinId: string): Promise<ApiResponse<{
+        success: boolean;
+        twinId: string;
+        photos: ImageAI[];
+        count: number;
+        message: string;
+        retrievedAt: string;
+    }>> {
+        console.log('📸 API Service - Getting family photos with AI analysis for twin:', twinId);
+        
+        // Intentar primero con el proxy de Vite, luego con URL directa si falla
+        try {
+            return await this.makeRequest(`/api/twins/${twinId}/family-photos`, {
+                method: 'GET'
+            });
+        } catch (error) {
+            console.warn('⚠️ Proxy failed, trying direct URL to backend...', error);
+            
+            // Fallback: usar URL directa del backend
+            const directUrl = `http://localhost:7011/api/twins/${twinId}/family-photos`;
+            console.log('🔄 Making direct API request to:', directUrl);
+            
+            const response = await fetch(directUrl, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': API_KEY,
+                },
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`❌ Direct API Error (${response.status}):`, errorText);
+                
+                let errorMessage = `HTTP ${response.status}`;
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    errorMessage = errorJson.detail || errorMessage;
+                } catch {
+                    errorMessage = errorText || errorMessage;
+                }
+                
+                return {
+                    success: false,
+                    data: undefined,
+                    error: errorMessage
+                };
+            }
+
+            const data = await response.json();
+            console.log('✅ Direct API response:', data);
+            
+            return {
+                success: true,
+                data: data,
+                error: undefined
+            };
+        }
     }
 }
 

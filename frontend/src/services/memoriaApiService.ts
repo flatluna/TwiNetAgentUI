@@ -164,27 +164,28 @@ class MemoriaApiService {
       const formData = new FormData();
       formData.append('photo', archivo, archivo.name);
       
-      // Agregar la descripción al FormData si existe
-      if (descripcion && descripcion.trim()) {
-        formData.append('description', descripcion.trim());
-      }
+      // Usar descripción proporcionada o 'MiMemoria' como default
+      const description = descripcion?.trim() || 'MiMemoria';
+      
+      // El path debe ser solamente 'MiMemoria', no incluir el nombre del archivo
+      const filePath = 'MiMemoria';
+      
+      // Generar un photoId único
+      const photoId = `photo_${memoriaId}_${Date.now()}`;
 
-      // Generar un photoId único basado en timestamp y nombre del archivo
-      const timestamp = Date.now();
-      const extension = archivo.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const photoId = `photo_${memoriaId}_${timestamp}.${extension}`;
-
-      console.log('📸 Subiendo y analizando foto con AnalyzeMemoriaPhoto:', {
+      console.log('📸 Subiendo foto con AnalyzeMemoriaPhoto:', {
         twinId,
         memoriaId,
         photoId,
-        descripcionOriginal: descripcion,
+        description,
+        filePath,
+        fileName: archivo.name,
         size: archivo.size,
         type: archivo.type,
         endpoint: `${this.baseUrl}/twins/${twinId}/memorias/${memoriaId}/photos/${photoId}/analyze`
       });
 
-      // Usar el endpoint correcto del backend: AnalyzeMemoriaPhoto
+      // Usar el nuevo endpoint: AnalyzeMemoriaPhoto
       // POST /api/twins/{twinId}/memorias/{memoriaId}/photos/{photoId}/analyze
       const response = await fetch(`${this.baseUrl}/twins/${twinId}/memorias/${memoriaId}/photos/${photoId}/analyze`, {
         method: 'POST',
@@ -209,10 +210,10 @@ class MemoriaApiService {
       }
 
       const data = await response.json();
-      console.log('✅ Foto subida y analizada exitosamente con AnalyzeMemoriaPhoto:', data);
+      console.log('✅ Foto subida exitosamente con AnalyzeMemoriaPhoto:', data);
       return data;
     } catch (error) {
-      console.error('❌ Error uploading and analyzing photo with AnalyzeMemoriaPhoto:', error);
+      console.error('❌ Error uploading photo with AnalyzeMemoriaPhoto:', error);
       throw error;
     }
   }

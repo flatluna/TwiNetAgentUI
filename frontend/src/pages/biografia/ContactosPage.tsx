@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useMsal } from "@azure/msal-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { twinApiService, Contact } from "@/services/twinApiService";
 import GoogleMapsLoader from "@/utils/googleMapsLoader";
@@ -20,7 +21,8 @@ import {
     Search,
     Heart,
     Briefcase,
-    RefreshCw
+    RefreshCw,
+    ArrowLeft
 } from "lucide-react";
 
 interface ContactFormData {
@@ -41,6 +43,7 @@ interface ContactFormData {
 
 const ContactosPage: React.FC = () => {
     const { accounts } = useMsal();
+    const navigate = useNavigate();
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingContact, setEditingContact] = useState<Contact | null>(null);
@@ -504,9 +507,19 @@ const ContactosPage: React.FC = () => {
                 {/* Header */}
                 <div className="mb-8">
                     <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-900 mb-2">Gestión de Contactos</h1>
-                            <p className="text-gray-600">Administra tu lista de contactos personales y profesionales</p>
+                        <div className="flex items-center gap-4">
+                            <Button
+                                onClick={() => navigate(-1)}
+                                variant="outline"
+                                className="flex items-center gap-2 hover:bg-gray-100"
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                                Atrás
+                            </Button>
+                            <div>
+                                <h1 className="text-3xl font-bold text-gray-900 mb-2">Gestión de Contactos</h1>
+                                <p className="text-gray-600">Administra tu lista de contactos personales y profesionales</p>
+                            </div>
                         </div>
                         <Button
                             onClick={refreshContacts}

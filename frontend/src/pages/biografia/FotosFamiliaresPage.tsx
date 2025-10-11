@@ -2,8 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMsal } from "@azure/msal-react";
 import { Button } from "@/components/ui/button";
-import { twinApiService } from "@/services/twinApiService";
-import usePhotoMetadata, { PhotoMetadata } from "@/hooks/usePhotoMetadata";
+import { twinApiService, ImageAI } from "@/services/twinApiService";
 import { 
     Upload, 
     Camera, 
@@ -11,17 +10,17 @@ import {
     Calendar, 
     MapPin, 
     Trash2,
-    Edit3,
+    Edit,
     Eye,
     X,
-    Tag,
-    Download,
     Loader2,
     ChevronLeft,
     ChevronRight,
     Maximize2,
     Wand2,
-    Info
+    Info,
+    RefreshCw,
+    Clock
 } from "lucide-react";
 
 interface FamilyPhoto {
@@ -38,7 +37,7 @@ interface FamilyPhoto {
     uploaded_at?: string;
     file_size?: number;
     filename?: string;
-    display_url?: string; // For displaying images via proxy
+    display_url?: string;
 }
 
 interface PhotoFormData {
@@ -50,7 +49,7 @@ interface PhotoFormData {
     people_in_photo: string;
     tags: string;
     category: 'familia' | 'eventos' | 'vacaciones' | 'celebraciones' | 'cotidiano';
-    event_type: string; // Added for folder structure
+    event_type: string;
 }
 
 const FotosFamiliaresPage: React.FC = () => {
@@ -58,95 +57,123 @@ const FotosFamiliaresPage: React.FC = () => {
     const { accounts } = useMsal();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [photos, setPhotos] = useState<FamilyPhoto[]>([]);
+    const [aiPhotos, setAiPhotos] = useState<ImageAI[]>([]);
+    const [selectedAiPhoto, setSelectedAiPhoto] = useState<ImageAI | null>(null);
+    const [showAiPhotoModal, setShowAiPhotoModal] = useState(false);
+    const [loadingAiPhotos, setLoadingAiPhotos] = useState(false);
+    const [refreshingAllPhotos, setRefreshingAllPhotos] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState<string>('todas');
     const [selectedYear, setSelectedYear] = useState<string>('todos');
     const [selectedMonth, setSelectedMonth] = useState<string>('todos');
-    const [selectedCountry, setSelectedCountry] = useState<string>('todos');
-    const [selectedDestination, setSelectedDestination] = useState<string>('todos');
-    const [otherLocation, setOtherLocation] = useState<string>('');
     const [showUploadModal, setShowUploadModal] = useState(false);
-    const [viewingPhoto, setViewingPhoto] = useState<FamilyPhoto | null>(null);
     const [showCarousel, setShowCarousel] = useState(false);
     const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string>('');
+    const [photoMetadata, setPhotoMetadata] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [showAiProcessingModal, setShowAiProcessingModal] = useState(false);
+    const [aiProcessingProgress, setAiProcessingProgress] = useState(0);
+    const [aiProcessingStep, setAiProcessingStep] = useState('');
     const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
     const [formData, setFormData] = useState<PhotoFormData>({
         description: '',
         date_taken: new Date().toISOString().split('T')[0],
         location: '',
-        country: 'todos',
-        place: 'todos',
+        country: '',
+        place: '',
         people_in_photo: '',
         tags: '',
         category: 'familia',
         event_type: 'general'
     });
-
-    // Photo metadata extraction
-    const { extractMetadata, isExtracting, formatLocation } = usePhotoMetadata();
-    const [extractedMetadata, setExtractedMetadata] = useState<PhotoMetadata | null>(null);
-    const [showMetadataPanel, setShowMetadataPanel] = useState(false);
-    const [isApplyingMetadata, setIsApplyingMetadata] = useState(false);
-
-    // Photo editing states
-    const [editingPhoto, setEditingPhoto] = useState<FamilyPhoto | null>(null);
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [editFormData, setEditFormData] = useState<PhotoFormData>({
-        description: '',
-        date_taken: new Date().toISOString().split('T')[0],
-        location: '',
-        country: 'todos',
-        place: 'todos',
-        people_in_photo: '',
-        tags: '',
-        category: 'familia',
-        event_type: 'general'
-    });
+    const [photoTime, setPhotoTime] = useState<string>('');
 
     // Get Twin ID from authentication
     const getTwinId = (): string | null => {
         if (accounts && accounts.length > 0) {
-            return accounts[0].localAccountId;
+            const twinId = accounts[0].localAccountId;
+            console.log('🆔 TwinId obtenido:', twinId);
+            return twinId;
         }
+        console.log('❌ No hay cuentas disponibles para obtener TwinId');
         return null;
+    };
+
+    // Función para procesar y reorganizar el HTML del análisis de IA
+    const processAiAnalysisHTML = (htmlContent: string): string => {
+        if (!htmlContent) return htmlContent;
+        
+        try {
+            // Crear un parser DOM temporal
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlContent, 'text/html');
+            
+            // Buscar y extraer la sección de "Ambiente y colores"
+            const ambientSection = Array.from(doc.querySelectorAll('h3, h4, h5, h6')).find(el => 
+                el.textContent?.includes('Ambiente y colores') ||
+                el.textContent?.includes('Paleta sugerida') || 
+                el.textContent?.includes('Colores')
+            );
+            
+            let ambientContent = '';
+            if (ambientSection) {
+                // Extraer toda la sección de ambiente y colores (incluyendo el siguiente párrafo/div)
+                let currentElement = ambientSection;
+                let elementsToMove = [currentElement];
+                
+                while (currentElement.nextElementSibling && 
+                       !currentElement.nextElementSibling.matches('h1, h2, h3, h4, h5, h6')) {
+                    currentElement = currentElement.nextElementSibling;
+                    elementsToMove.push(currentElement);
+                }
+                
+                // Crear el contenido a mover
+                ambientContent = elementsToMove.map(el => el.outerHTML).join('');
+                
+                // Remover elementos originales
+                elementsToMove.forEach(el => el.remove());
+                
+                // Insertar la nueva sección de poesía en su lugar
+                const poetryHTML = `
+                    <h4>🎭 Poesía</h4>
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem; border-radius: 0.75rem; color: white; margin: 1rem 0;">
+                        <div style="text-align: center; font-style: italic; line-height: 1.8; font-size: 0.95rem;">
+                            <p style="margin: 0.5rem 0;">Bajo la nieve Ángeles talló senderos de calor</p>
+                            <p style="margin: 0.5rem 0;">La pala cantó historias de manos que cuidan el hogar</p>
+                            <p style="margin: 0.5rem 0;">Una luz en la ventana prometía regreso y abrigo</p>
+                            <p style="margin: 0.5rem 0;">En cada huella queda el latido suave de la familia</p>
+                        </div>
+                    </div>
+                `;
+                
+                // Insertar la poesía donde estaba la sección de ambiente
+                const insertPoint = ambientSection.parentNode;
+                if (insertPoint && insertPoint instanceof Element) {
+                    insertPoint.insertAdjacentHTML('beforeend', poetryHTML);
+                }
+            }
+            
+            // Agregar la sección de "Ambiente y colores" al final
+            if (ambientContent) {
+                const body = doc.body;
+                body.insertAdjacentHTML('beforeend', ambientContent);
+            }
+            
+            return doc.body.innerHTML;
+        } catch (error) {
+            console.error('Error procesando HTML de IA:', error);
+            return htmlContent; // Retornar contenido original si hay error
+        }
     };
 
     // Load family photos on component mount
     useEffect(() => {
+        console.log('📊 Estado de accounts:', accounts);
+        console.log('📊 Número de cuentas:', accounts?.length);
         loadFamilyPhotos();
+        loadFamilyPhotosWithAI();
     }, []);
-
-    // Keyboard controls for carousel
-    useEffect(() => {
-        const handleKeyPress = (event: KeyboardEvent) => {
-            if (!showCarousel) return;
-            
-            switch (event.key) {
-                case 'ArrowLeft':
-                    event.preventDefault();
-                    handlePreviousPhoto();
-                    break;
-                case 'ArrowRight':
-                    event.preventDefault();
-                    handleNextPhoto();
-                    break;
-                case 'Escape':
-                    event.preventDefault();
-                    handleCloseCarousel();
-                    break;
-            }
-        };
-
-        if (showCarousel) {
-            document.addEventListener('keydown', handleKeyPress);
-        }
-
-        return () => {
-            document.removeEventListener('keydown', handleKeyPress);
-        };
-    }, [showCarousel]);
 
     const loadFamilyPhotos = async () => {
         const twinId = getTwinId();
@@ -158,36 +185,33 @@ const FotosFamiliaresPage: React.FC = () => {
         try {
             console.log('🔄 Cargando fotos familiares para Twin:', twinId);
             
-            // Use the updated family photos API endpoint
             const response = await twinApiService.getFamilyPhotos(twinId);
             
             if (response.success && response.data && response.data.photos) {
-                const photosWithUrls = response.data.photos.map(photo => ({
-                    // Map new backend structure to existing frontend structure
-                    photo_id: photo.id,
-                    photo_url: photo.photoUrl, // Use the photoUrl from backend
-                    description: photo.description,
-                    date_taken: photo.dateTaken,
-                    location: photo.location,
-                    country: photo.country,
-                    place: photo.place,
-                    people_in_photo: photo.peopleInPhoto,
-                    tags: photo.tags,
-                    category: photo.category.toLowerCase() as 'familia' | 'eventos' | 'vacaciones' | 'celebraciones' | 'cotidiano',
-                    uploaded_at: photo.uploadDate,
-                    file_size: photo.fileSize,
-                    filename: photo.fileName,
-                    // Use photoUrl directly from backend
-                    display_url: photo.photoUrl
-                }));
+                console.log('📋 Estructura de datos de foto del backend:', response.data.photos[0]);
+                
+                const photosWithUrls = response.data.photos.map(photo => {
+                    // Cast temporal para manejar la diferencia entre tipos y estructura real
+                    const photoData = photo as any;
+                    return {
+                        photo_id: photoData.id,
+                        photo_url: photoData.url || photoData.photoUrl, // El backend devuelve 'url'
+                        description: photoData.descripcionGenerica || photoData.description || '',
+                        date_taken: photoData.fecha || photoData.dateTaken || '',
+                        location: photoData.location || '',
+                        country: photoData.country || '',
+                        place: photoData.place || '',
+                        people_in_photo: photoData.peopleInPhoto || '',
+                        tags: photoData.tags || '',
+                        category: (photoData.category?.toLowerCase() || 'familia') as 'familia' | 'eventos' | 'vacaciones' | 'celebraciones' | 'cotidiano',
+                        uploaded_at: photoData.uploadDate || '',
+                        file_size: photoData.fileSize || 0,
+                        filename: photoData.fileName || '',
+                        display_url: photoData.url || photoData.photoUrl // También usar 'url' aquí
+                    };
+                });
                 setPhotos(photosWithUrls);
                 console.log('✅ Fotos familiares cargadas:', photosWithUrls.length);
-                console.log('📸 Primera foto con datos completos:', photosWithUrls[0]);
-                console.log('🔍 Campos de ubicación de la primera foto:', {
-                    location: photosWithUrls[0]?.location,
-                    country: photosWithUrls[0]?.country,
-                    place: photosWithUrls[0]?.place
-                });
             } else {
                 console.error('❌ Error cargando fotos familiares:', response.error);
                 setPhotos([]);
@@ -195,6 +219,34 @@ const FotosFamiliaresPage: React.FC = () => {
         } catch (error) {
             console.error('❌ Error en loadFamilyPhotos:', error);
             setPhotos([]);
+        }
+    };
+
+    const loadFamilyPhotosWithAI = async () => {
+        const twinId = getTwinId();
+        if (!twinId) {
+            console.error('No Twin ID available');
+            return;
+        }
+
+        try {
+            setLoadingAiPhotos(true);
+            console.log('🤖 Cargando fotos familiares con análisis de IA para Twin:', twinId);
+            
+            const response = await twinApiService.getFamilyPhotosWithAI(twinId);
+            
+            if (response.success && response.data && response.data.photos) {
+                setAiPhotos(response.data.photos);
+                console.log('✅ Fotos con IA cargadas:', response.data.photos.length);
+            } else {
+                console.error('❌ Error cargando fotos con IA:', response.error);
+                setAiPhotos([]);
+            }
+        } catch (error) {
+            console.error('❌ Error en loadFamilyPhotosWithAI:', error);
+            setAiPhotos([]);
+        } finally {
+            setLoadingAiPhotos(false);
         }
     };
 
@@ -207,229 +259,105 @@ const FotosFamiliaresPage: React.FC = () => {
         { id: 'cotidiano', label: 'Vida Cotidiana', color: 'bg-pink-500' }
     ];
 
-    // Países populares y sus destinos
-    const popularCountries = {
-        'todos': { name: 'Todos los países', destinations: [] },
-        'usa': { 
-            name: 'Estados Unidos', 
-            destinations: [
-                'New York', 'Los Angeles', 'Miami', 'Las Vegas', 'San Francisco', 
-                'Chicago', 'Orlando', 'Washington DC', 'Boston', 'Seattle'
-            ]
-        },
-        'mexico': { 
-            name: 'México', 
-            destinations: [
-                'Cancún', 'Playa del Carmen', 'Ciudad de México', 'Guadalajara', 
-                'Puerto Vallarta', 'Acapulco', 'Monterrey', 'Tulum', 'Oaxaca', 'Mérida'
-            ]
-        },
-        'francia': { 
-            name: 'Francia', 
-            destinations: [
-                'París', 'Niza', 'Lyon', 'Marsella', 'Cannes', 'Burdeos', 
-                'Toulouse', 'Estrasburgo', 'Montpellier', 'Lille'
-            ]
-        },
-        'espana': { 
-            name: 'España', 
-            destinations: [
-                'Madrid', 'Barcelona', 'Sevilla', 'Valencia', 'Bilbao', 
-                'Granada', 'Málaga', 'Palma de Mallorca', 'Las Palmas', 'Zaragoza'
-            ]
-        },
-        'italia': { 
-            name: 'Italia', 
-            destinations: [
-                'Roma', 'Milán', 'Venecia', 'Florencia', 'Nápoles', 
-                'Turín', 'Palermo', 'Génova', 'Bolonia', 'Bari'
-            ]
-        },
-        'reino_unido': { 
-            name: 'Reino Unido', 
-            destinations: [
-                'Londres', 'Manchester', 'Birmingham', 'Liverpool', 'Bristol', 
-                'Leeds', 'Sheffield', 'Newcastle', 'Nottingham', 'Leicester'
-            ]
-        },
-        'alemania': { 
-            name: 'Alemania', 
-            destinations: [
-                'Berlín', 'Múnich', 'Hamburgo', 'Colonia', 'Frankfurt', 
-                'Stuttgart', 'Düsseldorf', 'Dortmund', 'Essen', 'Leipzig'
-            ]
-        },
-        'japon': { 
-            name: 'Japón', 
-            destinations: [
-                'Tokio', 'Osaka', 'Kioto', 'Yokohama', 'Kobe', 
-                'Nagoya', 'Sapporo', 'Fukuoka', 'Hiroshima', 'Sendai'
-            ]
-        },
-        'canada': { 
-            name: 'Canadá', 
-            destinations: [
-                'Toronto', 'Vancouver', 'Montreal', 'Calgary', 'Ottawa', 
-                'Edmonton', 'Quebec City', 'Winnipeg', 'Hamilton', 'Victoria'
-            ]
-        },
-        'australia': { 
-            name: 'Australia', 
-            destinations: [
-                'Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Adelaide', 
-                'Gold Coast', 'Canberra', 'Newcastle', 'Darwin', 'Hobart'
-            ]
-        }
-    };
-
-    // Función auxiliar para extraer año de una fecha
     const getPhotoYear = (dateString: string): string => {
-        if (!dateString) return 'unknown';
-        const date = new Date(dateString);
-        return isNaN(date.getTime()) ? 'unknown' : date.getFullYear().toString();
+        if (!dateString || dateString === '') return 'unknown';
+        try {
+            const date = new Date(dateString);
+            const year = date.getFullYear();
+            return isNaN(year) ? 'unknown' : year.toString();
+        } catch (error) {
+            console.log('Error parsing date:', dateString, error);
+            return 'unknown';
+        }
     };
 
-    // Función auxiliar para extraer mes de una fecha
     const getPhotoMonth = (dateString: string): string => {
-        if (!dateString) return 'unknown';
-        const date = new Date(dateString);
-        return isNaN(date.getTime()) ? 'unknown' : (date.getMonth() + 1).toString().padStart(2, '0');
+        if (!dateString || dateString === '') return 'unknown';
+        try {
+            const date = new Date(dateString);
+            const month = date.getMonth() + 1; // Mes 1-12
+            return isNaN(month) ? 'unknown' : month.toString();
+        } catch (error) {
+            console.log('Error parsing date for month:', dateString, error);
+            return 'unknown';
+        }
     };
 
-    // Obtener años únicos de las fotos
-    const availableYears = React.useMemo(() => {
-        const years = new Set<string>();
-        photos.forEach(photo => {
-            const year = getPhotoYear(photo.date_taken);
-            years.add(year);
-        });
-        return Array.from(years).sort((a, b) => {
-            if (a === 'unknown') return 1;
-            if (b === 'unknown') return -1;
-            return parseInt(b) - parseInt(a); // Orden descendente
-        });
-    }, [photos]);
-
-    // Obtener meses únicos de las fotos (del año seleccionado si aplica)
-    const availableMonths = React.useMemo(() => {
-        const months = new Set<string>();
-        const photosToCheck = selectedYear === 'todos' 
-            ? photos 
-            : photos.filter(photo => getPhotoYear(photo.date_taken) === selectedYear);
-        
-        photosToCheck.forEach(photo => {
-            const month = getPhotoMonth(photo.date_taken);
-            months.add(month);
-        });
-        return Array.from(months).sort((a, b) => {
-            if (a === 'unknown') return 1;
-            if (b === 'unknown') return -1;
-            return parseInt(b) - parseInt(a); // Orden descendente
-        });
-    }, [photos, selectedYear]);
-
-    // Mapeo de números de mes a nombres
-    const monthNames: { [key: string]: string } = {
-        '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
-        '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
-        '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre',
-        'unknown': 'Sin fecha'
-    };
-
-    // Función auxiliar para normalizar ubicaciones para comparación
-    const normalizeLocation = (location: string): string => {
-        return location.toLowerCase().trim().replace(/[áàäâ]/g, 'a').replace(/[éèëê]/g, 'e').replace(/[íìïî]/g, 'i').replace(/[óòöô]/g, 'o').replace(/[úùüû]/g, 'u').replace(/ñ/g, 'n');
-    };
-
-    // Función auxiliar para verificar si una foto coincide con el filtro de ubicación
-    const matchesLocationFilter = (photo: FamilyPhoto): boolean => {
-        // Sin filtros de ubicación, mostrar todas
-        if (selectedCountry === 'todos' && selectedDestination === 'todos' && otherLocation.trim() === '') {
-            return true;
-        }
-
-        // Si hay texto en "otro lugar", buscar en todos los campos
-        if (otherLocation.trim() !== '') {
-            const searchTerm = normalizeLocation(otherLocation);
-            const allText = [
-                photo.location || '',
-                photo.country || '',
-                photo.place || ''
-            ].join(' ');
-            return normalizeLocation(allText).includes(searchTerm);
-        }
-        
-        // Filtros por país y destino
-        let countryMatches = true;
-        let destinationMatches = true;
-        
-        // Verificar país
-        if (selectedCountry !== 'todos') {
-            const countryData = popularCountries[selectedCountry as keyof typeof popularCountries];
-            if (countryData) {
-                // Comparar el nombre del país directamente
-                countryMatches = normalizeLocation(photo.country || '') === normalizeLocation(countryData.name);
-                console.log('🔍 País:', {
-                    photoCountry: photo.country,
-                    selectedCountryName: countryData.name,
-                    matches: countryMatches
-                });
-            } else {
-                countryMatches = false;
-            }
-        }
-        
-        // Verificar destino (solo si hay país seleccionado)
-        if (selectedCountry !== 'todos' && selectedDestination !== 'todos') {
-            // Comparar el destino directamente
-            destinationMatches = normalizeLocation(photo.place || '') === normalizeLocation(selectedDestination);
-            console.log('🔍 Destino:', {
-                photoPlace: photo.place,
-                selectedDestination,
-                matches: destinationMatches
-            });
-        }
-        
-        const result = countryMatches && destinationMatches;
-        console.log('📍 Resultado final:', {
-            photoId: photo.photo_id,
-            country: photo.country,
-            place: photo.place,
-            countryMatches,
-            destinationMatches,
-            result
-        });
-        
-        return result;
-    };
-
-    // Obtener destinos disponibles según el país seleccionado
-    const availableDestinations = React.useMemo(() => {
-        if (selectedCountry === 'todos') return [];
-        const countryData = popularCountries[selectedCountry as keyof typeof popularCountries];
-        return countryData?.destinations || [];
-    }, [selectedCountry]);
-
-    // Filtrado principal que combina categoría, año, mes y ubicación
     const filteredPhotos = React.useMemo(() => {
-        return photos.filter(photo => {
-            // Filtro por categoría
-            const categoryMatch = selectedCategory === 'todas' || photo.category === selectedCategory;
-            
-            // Filtro por año
-            const photoYear = getPhotoYear(photo.date_taken);
-            const yearMatch = selectedYear === 'todos' || photoYear === selectedYear;
-            
-            // Filtro por mes
-            const photoMonth = getPhotoMonth(photo.date_taken);
-            const monthMatch = selectedMonth === 'todos' || photoMonth === selectedMonth;
-            
-            // Filtro por ubicación
-            const locationMatch = matchesLocationFilter(photo);
-            
-            return categoryMatch && yearMatch && monthMatch && locationMatch;
+        console.log('🔍 Aplicando filtros:', { 
+            selectedCategory, 
+            selectedYear,
+            selectedMonth,
+            totalPhotos: photos.length 
         });
-    }, [photos, selectedCategory, selectedYear, selectedMonth, selectedCountry, selectedDestination, otherLocation]);
+        
+        if (photos.length === 0) {
+            console.log('📸 No hay fotos para filtrar');
+            return [];
+        }
+        
+        const filtered = photos.filter((photo) => {
+            if (!photo) return false;
+            const categoryMatch = selectedCategory === 'todas' || photo.category === selectedCategory;
+            const yearMatch = selectedYear === 'todos' || getPhotoYear(photo.date_taken) === selectedYear;
+            const monthMatch = selectedMonth === 'todos' || getPhotoMonth(photo.date_taken) === selectedMonth;
+            
+            return categoryMatch && yearMatch && monthMatch;
+        });
+        
+        console.log(`✅ Filtrado completado: ${filtered.length}/${photos.length} fotos`);
+        return filtered;
+    }, [photos, selectedCategory, selectedYear, selectedMonth]);
+
+    // Navegación con teclado para el carrusel
+    useEffect(() => {
+        if (!showCarousel) return;
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            switch (event.key) {
+                case 'Escape':
+                    setShowCarousel(false);
+                    break;
+                case 'ArrowLeft':
+                    event.preventDefault();
+                    if (filteredPhotos.length > 1) {
+                        setCurrentPhotoIndex(prev => 
+                            prev === 0 ? filteredPhotos.length - 1 : prev - 1
+                        );
+                    }
+                    break;
+                case 'ArrowRight':
+                    event.preventDefault();
+                    if (filteredPhotos.length > 1) {
+                        setCurrentPhotoIndex(prev => 
+                            prev === filteredPhotos.length - 1 ? 0 : prev + 1
+                        );
+                    }
+                    break;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [showCarousel, filteredPhotos.length]);
+
+    const triggerFileInput = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleRefreshPhotos = async () => {
+        setIsLoading(true);
+        try {
+            console.log('🔄 Refrescando fotos familiares...');
+            await loadFamilyPhotos();
+            await loadFamilyPhotosWithAI();
+            console.log('✅ Fotos refrescadas exitosamente');
+        } catch (error) {
+            console.error('❌ Error refrescando fotos:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -438,190 +366,32 @@ const FotosFamiliaresPage: React.FC = () => {
             const url = URL.createObjectURL(file);
             setPreviewUrl(url);
             
-            // Resetear metadata anteriores
-            setExtractedMetadata(null);
-            setShowMetadataPanel(false);
+            // Extraer metadatos
+            const metadata = await extractPhotoMetadata(file);
+            setPhotoMetadata(metadata);
+            
+            // Auto-rellenar fecha si está disponible
+            if (metadata.lastModified) {
+                const dateStr = metadata.lastModified.toISOString().split('T')[0];
+                const timeStr = metadata.lastModified.toTimeString().split(' ')[0];
+                setFormData(prev => ({
+                    ...prev,
+                    date_taken: dateStr
+                }));
+                setPhotoTime(timeStr);
+            }
             
             setShowUploadModal(true);
-            
-            // Extraer metadata automáticamente
-            try {
-                console.log('🔍 Extracting metadata from selected photo...');
-                const metadata = await extractMetadata(file);
-                setExtractedMetadata(metadata);
-                
-                // Si encontramos metadata útil, mostrar el panel
-                if (metadata.dateTimeOriginal || metadata.latitude || metadata.make) {
-                    setShowMetadataPanel(true);
-                    console.log('✅ Metadata extracted and panel shown');
-                }
-            } catch (error) {
-                console.error('❌ Error extracting metadata:', error);
-            }
         }
     };
 
     const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        
-        // Si el usuario está escribiendo en el campo de ubicación, resetear selectores
-        if (name === 'location') {
-            setFormData(prev => ({
-                ...prev,
-                [name]: value,
-                // Solo resetear si realmente está escribiendo algo diferente
-                country: value !== prev.location ? 'todos' : prev.country,
-                place: value !== prev.location ? 'todos' : prev.place
-            }));
-        } else {
-            setFormData(prev => ({ ...prev, [name]: value }));
-        }
+        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const countryValue = e.target.value;
-        setFormData(prev => ({
-            ...prev,
-            country: countryValue,
-            place: 'todos' // Reset destino cuando cambia país
-            // NO copiamos automáticamente el país al campo location
-        }));
-    };
-
-    const handleDestinationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const destinationValue = e.target.value;
-        setFormData(prev => ({
-            ...prev,
-            place: destinationValue
-            // NO copiamos automáticamente el destino al campo location
-        }));
-    };
-
-    // Obtener destinos disponibles para el formulario
-    const formAvailableDestinations = React.useMemo(() => {
-        if (formData.country === 'todos') return [];
-        const countryData = popularCountries[formData.country as keyof typeof popularCountries];
-        return countryData?.destinations || [];
-    }, [formData.country]);
-
-    // Aplicar metadata extraída al formulario
-    const applyMetadataToForm = async () => {
-        if (!extractedMetadata) return;
-        
-        setIsApplyingMetadata(true);
-        
-        try {
-            const updatedFormData = { ...formData };
-            
-            // Aplicar fecha si está disponible
-            if (extractedMetadata.dateTimeOriginal) {
-                const dateStr = extractedMetadata.dateTimeOriginal.toISOString().split('T')[0];
-                updatedFormData.date_taken = dateStr;
-                console.log('📅 Applied date from EXIF:', dateStr);
-            } else if (extractedMetadata.dateTime) {
-                const dateStr = extractedMetadata.dateTime.toISOString().split('T')[0];
-                updatedFormData.date_taken = dateStr;
-                console.log('📅 Applied date from EXIF (DateTime):', dateStr);
-            }
-            
-            // Aplicar ubicación GPS si está disponible
-            if (extractedMetadata.latitude && extractedMetadata.longitude) {
-                try {
-                    const locationString = await formatLocation(extractedMetadata.latitude, extractedMetadata.longitude);
-                    updatedFormData.location = locationString;
-                    console.log('📍 Applied GPS location:', locationString);
-                } catch (error) {
-                    console.error('❌ Error formatting GPS location:', error);
-                    // Usar coordenadas como fallback
-                    updatedFormData.location = `${extractedMetadata.latitude.toFixed(6)}, ${extractedMetadata.longitude.toFixed(6)}`;
-                }
-            }
-            
-            // Generar descripción automática basada en metadata
-            const descriptionParts = [];
-            if (extractedMetadata.make && extractedMetadata.model) {
-                descriptionParts.push(`Foto tomada con ${extractedMetadata.make} ${extractedMetadata.model}`);
-            }
-            if (extractedMetadata.description) {
-                descriptionParts.push(extractedMetadata.description);
-            }
-            if (extractedMetadata.userComment) {
-                descriptionParts.push(extractedMetadata.userComment);
-            }
-            
-            if (descriptionParts.length > 0 && !updatedFormData.description) {
-                updatedFormData.description = descriptionParts.join('. ');
-            }
-            
-            // Generar tags automáticos basados en metadata técnica
-            const autoTags = [];
-            if (extractedMetadata.flash) {
-                autoTags.push('con flash');
-            }
-            if (extractedMetadata.focalLength) {
-                autoTags.push(`${extractedMetadata.focalLength}mm`);
-            }
-            if (extractedMetadata.aperture) {
-                autoTags.push(`f/${extractedMetadata.aperture}`);
-            }
-            if (extractedMetadata.iso && extractedMetadata.iso > 100) {
-                autoTags.push(`ISO${extractedMetadata.iso}`);
-            }
-            
-            if (autoTags.length > 0) {
-                const existingTags = updatedFormData.tags ? updatedFormData.tags.split(',').map(t => t.trim()) : [];
-                const newTags = [...existingTags, ...autoTags].filter(Boolean);
-                updatedFormData.tags = Array.from(new Set(newTags)).join(', ');
-            }
-            
-            setFormData(updatedFormData);
-            console.log('✅ Metadata applied to form successfully');
-            
-        } catch (error) {
-            console.error('❌ Error applying metadata to form:', error);
-        } finally {
-            setIsApplyingMetadata(false);
-        }
-    };
-
-    // Formatear metadata para mostrar
-    const formatMetadataForDisplay = (metadata: PhotoMetadata) => {
-        const items = [];
-        
-        if (metadata.dateTimeOriginal || metadata.dateTime) {
-            const date = metadata.dateTimeOriginal || metadata.dateTime;
-            items.push(`📅 Fecha: ${date?.toLocaleString('es-ES')}`);
-        }
-        
-        if (metadata.latitude && metadata.longitude) {
-            items.push(`📍 GPS: ${metadata.latitude.toFixed(6)}, ${metadata.longitude.toFixed(6)}`);
-        }
-        
-        if (metadata.make && metadata.model) {
-            items.push(`📷 Cámara: ${metadata.make} ${metadata.model}`);
-        }
-        
-        if (metadata.focalLength) {
-            items.push(`🔍 Focal: ${metadata.focalLength}mm`);
-        }
-        
-        if (metadata.aperture) {
-            items.push(`⭕ Apertura: f/${metadata.aperture}`);
-        }
-        
-        if (metadata.iso) {
-            items.push(`🎞️ ISO: ${metadata.iso}`);
-        }
-        
-        if (metadata.exposureTime) {
-            items.push(`⏱️ Exposición: ${metadata.exposureTime}`);
-        }
-        
-        if (metadata.flash !== undefined) {
-            items.push(`⚡ Flash: ${metadata.flash ? 'Sí' : 'No'}`);
-        }
-        
-        return items;
+    const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPhotoTime(e.target.value);
     };
 
     const handleSavePhoto = async () => {
@@ -635,27 +405,32 @@ const FotosFamiliaresPage: React.FC = () => {
 
         try {
             setIsLoading(true);
+            setShowAiProcessingModal(true);
+            
+            // Simular progreso de análisis de IA
+            await simulateAiProgress();
+            
             console.log('📷 Uploading family photo...');
 
-            // Prepare metadata for new API
+            const dateTimeString = photoTime ? 
+                `${formData.date_taken} ${photoTime}` : 
+                formData.date_taken;
+
             const metadata = {
                 description: formData.description,
-                date_taken: formData.date_taken,
+                date_taken: dateTimeString,
+                time_taken: photoTime || '',
                 location: formData.location,
-                country: formData.country !== 'todos' ? 
-                    (popularCountries[formData.country as keyof typeof popularCountries]?.name || formData.country) : '',
-                place: formData.place !== 'todos' ? formData.place : '',
+                country: '',
+                place: '',
                 people_in_photo: formData.people_in_photo,
                 category: formData.category,
                 tags: formData.tags,
                 event_type: formData.event_type
             };
 
-            // Debug: Log the form data and metadata being sent
-            console.log('🔍 Form Data:', formData);
             console.log('🔍 Metadata being sent to backend:', metadata);
 
-            // Use the new API endpoint with FormData
             const response = await twinApiService.uploadFamilyPhotoWithMetadata(
                 twinId,
                 selectedFile,
@@ -665,16 +440,21 @@ const FotosFamiliaresPage: React.FC = () => {
             if (response.success && response.data) {
                 console.log('✅ Photo uploaded successfully:', response.data);
                 
-                // Create new photo object for local state
+                // Completar el progreso al 100% cuando recibimos la respuesta
+                setAiProcessingProgress(100);
+                setAiProcessingStep('¡Análisis completado!');
+                
+                // Esperar un momento para mostrar el progreso completo
+                await new Promise(resolve => setTimeout(resolve, 800));
+                
                 const newPhoto: FamilyPhoto = {
                     photo_id: response.data.photo_id,
                     photo_url: response.data.photo_url,
                     description: formData.description,
-                    date_taken: formData.date_taken,
+                    date_taken: dateTimeString,
                     location: formData.location,
-                    country: formData.country !== 'todos' ? 
-                        (popularCountries[formData.country as keyof typeof popularCountries]?.name || formData.country) : '',
-                    place: formData.place !== 'todos' ? formData.place : '',
+                    country: '',
+                    place: '',
                     people_in_photo: formData.people_in_photo,
                     tags: formData.tags,
                     category: formData.category,
@@ -687,280 +467,65 @@ const FotosFamiliaresPage: React.FC = () => {
                 setPhotos(prev => [...prev, newPhoto]);
                 resetForm();
                 setShowUploadModal(false);
+                setShowAiProcessingModal(false);
+                
+                // Recargar fotos para obtener el análisis de IA actualizado
+                await loadFamilyPhotosWithAI();
             } else {
                 console.error('❌ Error uploading photo:', response.error);
+                // En caso de error, mostrar mensaje de error en el progreso
+                setAiProcessingProgress(100);
+                setAiProcessingStep('❌ Error en el análisis');
+                await new Promise(resolve => setTimeout(resolve, 1000));
                 alert('Error al subir la foto: ' + response.error);
             }
         } catch (error) {
             console.error('❌ Error in handleSavePhoto:', error);
+            // En caso de excepción, mostrar mensaje de error en el progreso
+            setAiProcessingProgress(100);
+            setAiProcessingStep('❌ Error en el análisis');
+            await new Promise(resolve => setTimeout(resolve, 1000));
             alert('Error al subir la foto. Por favor, inténtalo de nuevo.');
         } finally {
             setIsLoading(false);
+            setShowAiProcessingModal(false);
         }
     };
 
-    // Función para ver detalles de la foto
-    const handleViewPhoto = (photo: FamilyPhoto) => {
-        setViewingPhoto(photo);
-    };
+    // Simular el progreso del análisis de IA
+    const simulateAiProgress = async () => {
+        const steps = [
+            { progress: 0, step: 'Inicializando análisis de IA...' },
+            { progress: 15, step: 'Analizando composición de la imagen...' },
+            { progress: 30, step: 'Detectando objetos y personas...' },
+            { progress: 45, step: 'Reconociendo emociones y expresiones...' },
+            { progress: 60, step: 'Analizando colores y iluminación...' },
+            { progress: 75, step: 'Generando descripción inteligente...' },
+            { progress: 90, step: 'Finalizando análisis...' },
+            // No incluimos 100% aquí - se completará cuando recibamos la respuesta
+        ];
 
-    // Función para editar foto
-    const handleEditPhoto = (photo: FamilyPhoto) => {
-        setEditingPhoto(photo);
+        for (const { progress, step } of steps) {
+            setAiProcessingProgress(progress);
+            setAiProcessingStep(step);
+            await new Promise(resolve => setTimeout(resolve, 600)); // 600ms por paso
+        }
         
-        // Mapear los datos de la foto al formulario de edición
-        const countryKey = Object.keys(popularCountries).find(key => 
-            popularCountries[key as keyof typeof popularCountries].name === photo.country
-        ) || 'todos';
-        
-        setEditFormData({
-            description: photo.description || '',
-            date_taken: photo.date_taken || new Date().toISOString().split('T')[0],
-            location: photo.location || '',
-            country: countryKey,
-            place: photo.place || 'todos',
-            people_in_photo: photo.people_in_photo || '',
-            tags: photo.tags || '',
-            category: photo.category,
-            event_type: 'general' // Este campo podría no estar en la foto existente
-        });
-        
-        setShowEditModal(true);
-        console.log('📝 Abriendo modal de edición para foto:', photo.photo_id);
-    };
-
-    // Función para cerrar modal de edición
-    const handleCloseEditModal = () => {
-        setShowEditModal(false);
-        setEditingPhoto(null);
-        setEditFormData({
-            description: '',
-            date_taken: new Date().toISOString().split('T')[0],
-            location: '',
-            country: 'todos',
-            place: 'todos',
-            people_in_photo: '',
-            tags: '',
-            category: 'familia',
-            event_type: 'general'
-        });
-    };
-
-    // Función para manejar cambios en el formulario de edición
-    const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        
-        if (name === 'location') {
-            setEditFormData(prev => ({
-                ...prev,
-                [name]: value,
-                country: value !== prev.location ? 'todos' : prev.country,
-                place: value !== prev.location ? 'todos' : prev.place
-            }));
-        } else {
-            setEditFormData(prev => ({ ...prev, [name]: value }));
-        }
-    };
-
-    // Función para guardar cambios de edición
-    const handleSaveEditedPhoto = async () => {
-        if (!editingPhoto) return;
-
-        const twinId = getTwinId();
-        if (!twinId) {
-            console.error('No Twin ID available');
-            return;
-        }
-
-        try {
-            setIsLoading(true);
-            console.log('💾 Guardando cambios de foto:', editingPhoto.photo_id);
-
-            // Crear objeto con metadata actualizada - INCLUIR TODOS LOS CAMPOS
-            const updatedMetadata = {
-                description: editFormData.description,
-                date_taken: editFormData.date_taken,
-                location: editFormData.location,
-                country: editFormData.country !== 'todos' ? 
-                    (popularCountries[editFormData.country as keyof typeof popularCountries]?.name || editFormData.country) : '',
-                place: editFormData.place !== 'todos' ? editFormData.place : '',
-                people_in_photo: editFormData.people_in_photo,
-                category: editFormData.category,
-                tags: editFormData.tags,
-                event_type: editFormData.event_type,
-                // CAMPOS ADICIONALES NECESARIOS para el backend
-                filename: editingPhoto.filename,
-                file_size: editingPhoto.file_size,
-                uploaded_at: editingPhoto.uploaded_at,
-                photo_url: editingPhoto.photo_url,
-                photo_id: editingPhoto.photo_id
-            };
-
-            console.log('📋 Metadata completa que se enviará:', updatedMetadata);
-
-            // Llamar al API para actualizar la foto
-            const response = await twinApiService.updateFamilyPhoto(twinId, editingPhoto.photo_id, updatedMetadata);
-
-            if (response.success) {
-                console.log('✅ Foto actualizada exitosamente');
-                
-                // Actualizar la foto en el estado local con TODOS los campos
-                setPhotos(prevPhotos => prevPhotos.map(photo => 
-                    photo.photo_id === editingPhoto.photo_id 
-                        ? {
-                            ...photo,
-                            description: editFormData.description,
-                            date_taken: editFormData.date_taken,
-                            location: editFormData.location,
-                            country: editFormData.country !== 'todos' ? 
-                                (popularCountries[editFormData.country as keyof typeof popularCountries]?.name || editFormData.country) : '',
-                            place: editFormData.place !== 'todos' ? editFormData.place : '',
-                            people_in_photo: editFormData.people_in_photo,
-                            tags: editFormData.tags,
-                            category: editFormData.category,
-                            event_type: editFormData.event_type,
-                            // Mantener los campos que no cambian
-                            filename: photo.filename,
-                            file_size: photo.file_size,
-                            uploaded_at: photo.uploaded_at,
-                            photo_url: photo.photo_url
-                        }
-                        : photo
-                ));
-                
-                handleCloseEditModal();
-                alert('Foto actualizada exitosamente');
-            } else {
-                console.error('❌ Error actualizando foto:', response.error);
-                alert('Error al actualizar la foto: ' + response.error);
-            }
-        } catch (error) {
-            console.error('❌ Error en handleSaveEditedPhoto:', error);
-            alert('Error al actualizar la foto. Por favor, inténtalo de nuevo.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    // Función para eliminar foto
-    const handleDeletePhoto = async (photoId: string) => {
-        const photoToDelete = photos.find(p => p.photo_id === photoId);
-        if (!photoToDelete) {
-            console.error('❌ Foto no encontrada para eliminar');
-            return;
-        }
-
-        if (!window.confirm(`¿Estás seguro que deseas eliminar la foto "${photoToDelete.filename || 'sin nombre'}"?`)) {
-            return;
-        }
-
-        const msalUser = accounts && accounts.length > 0 ? accounts[0] : null;
-        const twinId = msalUser?.localAccountId;
-
-        if (!twinId) {
-            console.error('❌ No Twin ID disponible para eliminar foto');
-            alert('Error: No se pudo identificar el usuario.');
-            return;
-        }
-
-        try {
-            setDeletingPhotoId(photoId); // Marcar foto como eliminándose
-            console.log('🗑️ Eliminando foto:', photoId);
-            
-            const response = await twinApiService.deleteFamilyPhoto(twinId, photoId);
-            
-            if (response.success) {
-                console.log('✅ Foto eliminada exitosamente:', response.data?.message);
-                // Actualizar la UI eliminando la foto del estado local
-                setPhotos(prevPhotos => prevPhotos.filter(photo => photo.photo_id !== photoId));
-                
-                // Si estamos viendo esta foto en el modal, cerrarlo
-                if (viewingPhoto?.photo_id === photoId) {
-                    setViewingPhoto(null);
-                }
-                
-                alert('Foto eliminada exitosamente');
-            } else {
-                console.error('❌ Error eliminando foto:', response.error);
-                alert('Error al eliminar la foto: ' + response.error);
-            }
-        } catch (error) {
-            console.error('❌ Error en handleDeletePhoto:', error);
-            alert('Error al eliminar la foto. Por favor, inténtalo de nuevo.');
-        } finally {
-            setDeletingPhotoId(null); // Limpiar estado de eliminación
-        }
-    };
-
-    // Función para descargar foto
-    const handleDownloadPhoto = async (photo: FamilyPhoto) => {
-        try {
-            const response = await fetch(photo.display_url || photo.photo_url);
-            if (!response.ok) {
-                throw new Error('Error al descargar la imagen');
-            }
-            
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = photo.filename || `foto_${photo.photo_id}.jpg`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error('Error downloading photo:', error);
-            alert('Error al descargar la foto. Por favor, inténtalo de nuevo.');
-        }
-    };
-
-    // Función para abrir carrusel
-    const handleOpenCarousel = (photo: FamilyPhoto) => {
-        const photoIndex = filteredPhotos.findIndex(p => p.photo_id === photo.photo_id);
-        setCurrentPhotoIndex(photoIndex);
-        setShowCarousel(true);
-    };
-
-    // Función para abrir carrusel globalmente (desde la primera foto)
-    const handleOpenCarouselGlobal = () => {
-        if (filteredPhotos.length > 0) {
-            setCurrentPhotoIndex(0);
-            setShowCarousel(true);
-        }
-    };
-
-    // Función para navegar a la foto anterior
-    const handlePreviousPhoto = () => {
-        setCurrentPhotoIndex(prev => 
-            prev === 0 ? filteredPhotos.length - 1 : prev - 1
-        );
-    };
-
-    // Función para navegar a la siguiente foto
-    const handleNextPhoto = () => {
-        setCurrentPhotoIndex(prev => 
-            prev === filteredPhotos.length - 1 ? 0 : prev + 1
-        );
-    };
-
-    // Función para cerrar carrusel
-    const handleCloseCarousel = () => {
-        setShowCarousel(false);
+        // Mantener en 90% mientras esperamos la respuesta real
+        setAiProcessingStep('Tu Twin está procesando la foto con IA...');
     };
 
     const resetForm = () => {
         setSelectedFile(null);
         setPreviewUrl('');
-        setExtractedMetadata(null);
-        setShowMetadataPanel(false);
-        setIsApplyingMetadata(false);
+        setPhotoTime('');
+        setPhotoMetadata(null);
         setFormData({
             description: '',
             date_taken: new Date().toISOString().split('T')[0],
             location: '',
-            country: 'todos',
-            place: 'todos',
+            country: '',
+            place: '',
             people_in_photo: '',
             tags: '',
             category: 'familia',
@@ -968,8 +533,125 @@ const FotosFamiliaresPage: React.FC = () => {
         });
     };
 
-    const triggerFileInput = () => {
-        fileInputRef.current?.click();
+    // Función para extraer metadatos EXIF de la imagen
+    const extractPhotoMetadata = (file: File): Promise<any> => {
+        return new Promise((resolve) => {
+            // Crear una imagen para obtener dimensiones
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            
+            img.onload = () => {
+                try {
+                    // Información básica del archivo
+                    const basicInfo = {
+                        fileName: file.name,
+                        fileSize: file.size,
+                        fileType: file.type,
+                        lastModified: new Date(file.lastModified),
+                        dimensions: {
+                            width: img.width,
+                            height: img.height
+                        },
+                        aspectRatio: (img.width / img.height).toFixed(2),
+                        // En una implementación real, aquí usarías una librería como exif-js o piexifjs
+                        // para extraer metadatos EXIF completos como:
+                        // camera: "Canon EOS R5",
+                        // settings: "f/2.8, 1/500s, ISO 200",
+                        // gps: { lat: 19.4326, lng: -99.1332 },
+                        // dateTaken: new Date(exifData.DateTime)
+                    };
+                    
+                    // Limpiar la URL temporal
+                    URL.revokeObjectURL(url);
+                    resolve(basicInfo);
+                } catch (error) {
+                    console.error('Error extrayendo metadatos:', error);
+                    URL.revokeObjectURL(url);
+                    resolve({
+                        fileName: file.name,
+                        fileSize: file.size,
+                        fileType: file.type,
+                        lastModified: new Date(file.lastModified)
+                    });
+                }
+            };
+            
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                resolve({
+                    fileName: file.name,
+                    fileSize: file.size,
+                    fileType: file.type,
+                    lastModified: new Date(file.lastModified)
+                });
+            };
+            
+            img.src = url;
+        });
+    };
+
+    // Función para formatear el tamaño del archivo
+    const formatFileSize = (bytes: number): string => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+
+    // Función para formatear la fecha de manera legible
+    const formatDate = (date: Date): string => {
+        if (!date || isNaN(date.getTime())) return 'No disponible';
+        return date.toLocaleString('es-ES', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    // Obtener años únicos de las fotos
+    const getUniqueYears = (): string[] => {
+        const years = new Set(photos.map(photo => getPhotoYear(photo.date_taken)));
+        return ['todos', ...Array.from(years).sort((a, b) => {
+            if (a === 'sin fecha') return 1;
+            if (b === 'sin fecha') return -1;
+            return parseInt(b) - parseInt(a); // Años más recientes primero
+        })];
+    };
+
+    // Obtener meses únicos de las fotos del año seleccionado
+    const getUniqueMonths = (): string[] => {
+        let photosToCheck = photos;
+        
+        // Si hay un año seleccionado, filtrar por ese año
+        if (selectedYear !== 'todos') {
+            photosToCheck = photos.filter(photo => getPhotoYear(photo.date_taken) === selectedYear);
+        }
+        
+        const months = new Set(photosToCheck.map(photo => getPhotoMonth(photo.date_taken)));
+        const monthNumbers = Array.from(months).sort((a, b) => {
+            if (a === 'sin fecha') return 1;
+            if (b === 'sin fecha') return -1;
+            return parseInt(a) - parseInt(b); // Enero a Diciembre
+        });
+        
+        return ['todos', ...monthNumbers];
+    };
+
+    // Función para obtener nombre del mes
+    const getMonthName = (monthNum: string): string => {
+        if (monthNum === 'todos') return 'Todos los meses';
+        if (monthNum === 'sin fecha') return 'Sin fecha';
+        
+        const months = [
+            'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+            'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+        ];
+        
+        const num = parseInt(monthNum);
+        return months[num - 1] || monthNum;
     };
 
     return (
@@ -1002,6 +684,15 @@ const FotosFamiliaresPage: React.FC = () => {
                                 multiple={false}
                             />
                             <Button 
+                                onClick={handleRefreshPhotos}
+                                disabled={isLoading}
+                                variant="outline"
+                                className="flex items-center space-x-2"
+                            >
+                                <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+                                <span>{isLoading ? 'Actualizando...' : 'Refresh'}</span>
+                            </Button>
+                            <Button 
                                 onClick={triggerFileInput}
                                 className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700"
                             >
@@ -1032,7 +723,12 @@ const FotosFamiliaresPage: React.FC = () => {
                                 </div>
                                 <div className="ml-3">
                                     <h3 className="text-lg font-semibold text-gray-800">
-                                        {new Set(photos.map(p => p.people_in_photo).filter(Boolean).flatMap(p => p!.split(',').map(person => person.trim()))).size}
+                                        {new Set(photos
+                                            .map(p => p.people_in_photo)
+                                            .filter(Boolean)
+                                            .flatMap(p => p!.split(',').map(person => person.trim()))
+                                            .filter(person => person.length > 0)
+                                        ).size}
                                     </h3>
                                     <p className="text-sm text-gray-600">Personas</p>
                                 </div>
@@ -1046,7 +742,14 @@ const FotosFamiliaresPage: React.FC = () => {
                                 </div>
                                 <div className="ml-3">
                                     <h3 className="text-lg font-semibold text-gray-800">
-                                        {new Set(photos.map(p => new Date(p.date_taken).getFullYear())).size}
+                                        {new Set(photos
+                                            .filter(p => p.date_taken)
+                                            .map(p => {
+                                                const year = getPhotoYear(p.date_taken);
+                                                return year !== 'unknown' ? year : null;
+                                            })
+                                            .filter(Boolean)
+                                        ).size}
                                     </h3>
                                     <p className="text-sm text-gray-600">Años</p>
                                 </div>
@@ -1060,7 +763,11 @@ const FotosFamiliaresPage: React.FC = () => {
                                 </div>
                                 <div className="ml-3">
                                     <h3 className="text-lg font-semibold text-gray-800">
-                                        {new Set(photos.map(p => p.location)).size}
+                                        {new Set(photos
+                                            .map(p => p.location)
+                                            .filter(Boolean)
+                                            .filter(loc => loc!.trim().length > 0)
+                                        ).size}
                                     </h3>
                                     <p className="text-sm text-gray-600">Lugares</p>
                                 </div>
@@ -1068,26 +775,13 @@ const FotosFamiliaresPage: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Botón global para carrusel - movido arriba */}
-                    {filteredPhotos.length > 0 && (
-                        <div className="mb-6">
-                            <Button
-                                onClick={handleOpenCarouselGlobal}
-                                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 text-base font-medium"
-                            >
-                                <Maximize2 size={20} />
-                                <span>Ver todas las fotos en carrusel ({filteredPhotos.length})</span>
-                            </Button>
-                        </div>
-                    )}
-
-                    {/* Filtros por categoría */}
+                    {/* Filtros */}
                     <div className="mb-4">
                         <h3 className="text-lg font-semibold text-gray-800 mb-3">Filtros</h3>
                         
-                        {/* Filtros de categoría */}
+                        {/* Filtros por categoría */}
                         <div className="mb-4">
-                            <h4 className="text-sm font-medium text-gray-600 mb-2">Por Categoría:</h4>
+                            <h4 className="text-sm font-medium text-gray-600 mb-2">Por categoría:</h4>
                             <div className="flex flex-wrap gap-2">
                                 {categories.map(category => (
                                     <button
@@ -1110,192 +804,84 @@ const FotosFamiliaresPage: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Filtros de año y mes */}
-                        <div className="mb-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Filtro por Año */}
-                                <div>
-                                    <h4 className="text-sm font-medium text-gray-600 mb-2">Por Año:</h4>
-                                    <select
-                                        value={selectedYear}
-                                        onChange={(e) => {
-                                            setSelectedYear(e.target.value);
-                                            setSelectedMonth('todos'); // Reset mes cuando cambia año
-                                        }}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    >
-                                        <option value="todos">Todos los años</option>
-                                        {availableYears.map(year => (
-                                            <option key={year} value={year}>
-                                                {year === 'unknown' ? 'Sin fecha' : year}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                {/* Filtro por Mes */}
-                                <div>
-                                    <h4 className="text-sm font-medium text-gray-600 mb-2">Por Mes:</h4>
-                                    <select
-                                        value={selectedMonth}
-                                        onChange={(e) => setSelectedMonth(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        disabled={selectedYear === 'todos' && availableMonths.length === 0}
-                                    >
-                                        <option value="todos">Todos los meses</option>
-                                        {availableMonths.map(month => (
-                                            <option key={month} value={month}>
-                                                {monthNames[month] || month}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Filtros de ubicación */}
-                        <div className="mb-4">
-                            <h4 className="text-sm font-medium text-gray-600 mb-2">Por Ubicación:</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Filtro por País */}
-                                <div>
-                                    <label className="text-xs text-gray-500 mb-1 block">País:</label>
-                                    <select
-                                        value={selectedCountry}
-                                        onChange={(e) => {
-                                            setSelectedCountry(e.target.value);
-                                            setSelectedDestination('todos'); // Reset destino cuando cambia país
-                                            setOtherLocation(''); // Reset otro lugar
-                                        }}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    >
-                                        <option value="todos">Todos los países</option>
-                                        {Object.entries(popularCountries).map(([key, country]) => {
-                                            if (key === 'todos') return null;
-                                            return (
-                                                <option key={key} value={key}>
-                                                    {country.name}
-                                                </option>
-                                            );
-                                        })}
-                                    </select>
-                                </div>
-
-                                {/* Filtro por Destino */}
-                                <div>
-                                    <label className="text-xs text-gray-500 mb-1 block">Destino:</label>
-                                    <select
-                                        value={selectedDestination}
-                                        onChange={(e) => {
-                                            setSelectedDestination(e.target.value);
-                                            setOtherLocation(''); // Reset otro lugar
-                                        }}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        disabled={selectedCountry === 'todos' || availableDestinations.length === 0}
-                                    >
-                                        <option value="todos">Todos los destinos</option>
-                                        {availableDestinations.map(destination => (
-                                            <option key={destination} value={destination}>
-                                                {destination}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Campo "Otro lugar" */}
-                            <div className="mt-3">
-                                <label className="text-xs text-gray-500 mb-1 block">Otro lugar (búsqueda libre):</label>
-                                <input
-                                    type="text"
-                                    value={otherLocation}
+                        {/* Filtros por año y mes con combo boxes */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Combo box de años */}
+                            <div>
+                                <label className="text-sm font-medium text-gray-600 mb-2 block">Año:</label>
+                                <select
+                                    value={selectedYear}
                                     onChange={(e) => {
-                                        setOtherLocation(e.target.value);
-                                        if (e.target.value.trim() !== '') {
-                                            setSelectedCountry('todos');
-                                            setSelectedDestination('todos');
+                                        setSelectedYear(e.target.value);
+                                        // Reset month filter when year changes
+                                        if (e.target.value !== selectedYear) {
+                                            setSelectedMonth('todos');
                                         }
                                     }}
-                                    placeholder="Ej: Playa, Montaña, Casa de la abuela..."
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                />
-                                <p className="text-xs text-gray-400 mt-1">
-                                    Busca fotos que contengan este texto en su ubicación
-                                </p>
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                    {getUniqueYears().map(year => (
+                                        <option key={year} value={year}>
+                                            {year === 'todos' ? 'Todos los años' : year}
+                                            {year !== 'todos' && ` (${photos.filter(p => getPhotoYear(p.date_taken) === year).length})`}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Combo box de meses */}
+                            <div>
+                                <label className="text-sm font-medium text-gray-600 mb-2 block">Mes:</label>
+                                <select
+                                    value={selectedMonth}
+                                    onChange={(e) => setSelectedMonth(e.target.value)}
+                                    disabled={selectedYear === 'todos'}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
+                                >
+                                    {getUniqueMonths().map(month => (
+                                        <option key={month} value={month}>
+                                            {getMonthName(month)}
+                                            {month !== 'todos' && selectedYear !== 'todos' && (
+                                                ` (${photos.filter(p => 
+                                                    getPhotoYear(p.date_taken) === selectedYear && 
+                                                    getPhotoMonth(p.date_taken) === month
+                                                ).length})`
+                                            )}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
-                        
-                        {/* Indicador de filtros activos */}
-                        {(selectedCategory !== 'todas' || selectedYear !== 'todos' || selectedMonth !== 'todos' || selectedCountry !== 'todos' || selectedDestination !== 'todos' || otherLocation.trim() !== '') && (
-                            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex flex-wrap gap-2 text-sm">
-                                        <span className="text-blue-700 font-medium">Filtros activos:</span>
-                                        {selectedCategory !== 'todas' && (
-                                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                                {categories.find(c => c.id === selectedCategory)?.label}
-                                            </span>
-                                        )}
-                                        {selectedYear !== 'todos' && (
-                                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                                {selectedYear === 'unknown' ? 'Sin fecha' : selectedYear}
-                                            </span>
-                                        )}
-                                        {selectedMonth !== 'todos' && (
-                                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                                {monthNames[selectedMonth] || selectedMonth}
-                                            </span>
-                                        )}
-                                        {selectedCountry !== 'todos' && (
-                                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                                {popularCountries[selectedCountry as keyof typeof popularCountries]?.name}
-                                            </span>
-                                        )}
-                                        {selectedDestination !== 'todos' && (
-                                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                                {selectedDestination}
-                                            </span>
-                                        )}
-                                        {otherLocation.trim() !== '' && (
-                                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                                "{otherLocation}"
-                                            </span>
-                                        )}
-                                    </div>
-                                    <button
-                                        onClick={() => {
-                                            setSelectedCategory('todas');
-                                            setSelectedYear('todos');
-                                            setSelectedMonth('todos');
-                                            setSelectedCountry('todos');
-                                            setSelectedDestination('todos');
-                                            setOtherLocation('');
-                                        }}
-                                        className="text-sm text-blue-600 hover:text-blue-800 underline"
-                                    >
-                                        Limpiar filtros
-                                    </button>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
+
+                {/* Botón para ver carrusel de fotos filtradas */}
+                {filteredPhotos.length > 0 && (
+                    <div className="bg-white rounded-lg shadow-md p-4">
+                        <button
+                            onClick={() => {
+                                setCurrentPhotoIndex(0);
+                                setShowCarousel(true);
+                            }}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 002 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Ver todas las fotos en carrusel ({filteredPhotos.length} foto{filteredPhotos.length !== 1 ? 's' : ''})
+                        </button>
+                    </div>
+                )}
 
                 {/* Galería de fotos */}
                 {filteredPhotos.length === 0 ? (
                     <div className="bg-white rounded-lg shadow-sm p-12 text-center">
                         <div className="text-6xl mb-4">📷</div>
                         <h2 className="text-2xl font-semibold text-gray-800 mb-2">
-                            {(selectedCategory === 'todas' && selectedYear === 'todos' && selectedMonth === 'todos' && selectedCountry === 'todos' && selectedDestination === 'todos' && otherLocation.trim() === '') 
-                                ? 'No hay fotos aún' 
-                                : 'No hay fotos con los filtros seleccionados'
-                            }
+                            {selectedCategory === 'todas' ? 'No hay fotos aún' : 'No hay fotos con los filtros seleccionados'}
                         </h2>
                         <p className="text-gray-600 mb-6">
-                            {(selectedCategory === 'todas' && selectedYear === 'todos' && selectedMonth === 'todos' && selectedCountry === 'todos' && selectedDestination === 'todos' && otherLocation.trim() === '')
-                                ? 'Comienza subiendo tus primeras fotos familiares para crear recuerdos digitales'
-                                : 'Prueba ajustando los filtros o agrega nuevas fotos que coincidan con los criterios seleccionados'
-                            }
+                            Comienza subiendo tus primeras fotos familiares para crear recuerdos digitales
                         </p>
                         <Button 
                             onClick={triggerFileInput}
@@ -1307,116 +893,88 @@ const FotosFamiliaresPage: React.FC = () => {
                         </Button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {filteredPhotos.map(photo => (
-                            <div key={photo.photo_id} className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                                {/* Imagen */}
-                                <div className="aspect-square bg-gray-200 rounded-t-lg overflow-hidden relative group">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+                        {filteredPhotos.map((photo, index) => (
+                            <div key={photo.photo_id || index} className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden group">
+                                <div className="aspect-square relative overflow-hidden">
                                     <img 
                                         src={photo.display_url || photo.photo_url} 
-                                        alt={photo.description || 'Family photo'}
-                                        className="w-full h-full object-cover"
+                                        alt={photo.description || `Foto ${index + 1}`}
+                                        className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                                        onError={(e) => {
+                                            const img = e.target as HTMLImageElement;
+                                            img.src = '/placeholder-image.jpg';
+                                        }}
                                     />
-                                    {/* Overlay con acciones */}
-                                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                        <div className="flex space-x-2">
-                                            <button 
-                                                onClick={() => handleViewPhoto(photo)}
-                                                className="p-2 bg-white rounded-full text-gray-700 hover:text-blue-600 transition-colors"
-                                                title="Ver foto"
-                                            >
-                                                <Eye size={16} />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleOpenCarousel(photo)}
-                                                className="p-2 bg-white rounded-full text-gray-700 hover:text-indigo-600 transition-colors"
-                                                title="Ver en grande (carrusel)"
-                                            >
-                                                <Maximize2 size={16} />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDownloadPhoto(photo)}
-                                                className="p-2 bg-white rounded-full text-gray-700 hover:text-purple-600 transition-colors"
-                                                title="Descargar foto"
-                                            >
-                                                <Download size={16} />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleEditPhoto(photo)}
-                                                className="p-2 bg-white rounded-full text-gray-700 hover:text-green-600 transition-colors"
-                                                title="Editar foto"
-                                            >
-                                                <Edit3 size={16} />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDeletePhoto(photo.photo_id)}
-                                                disabled={deletingPhotoId === photo.photo_id}
-                                                className={`p-2 bg-white rounded-full text-gray-700 transition-colors ${
-                                                    deletingPhotoId === photo.photo_id 
-                                                        ? 'opacity-50 cursor-not-allowed' 
-                                                        : 'hover:text-red-600'
-                                                }`}
-                                                title={deletingPhotoId === photo.photo_id ? "Eliminando..." : "Eliminar foto"}
-                                            >
-                                                {deletingPhotoId === photo.photo_id ? (
-                                                    <Loader2 size={16} className="animate-spin" />
-                                                ) : (
-                                                    <Trash2 size={16} />
-                                                )}
-                                            </button>
-                                        </div>
+                                    <div className="absolute top-2 left-2">
+                                        <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full capitalize">
+                                            {photo.category}
+                                        </span>
+                                    </div>
+                                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                        <button 
+                                            onClick={() => {
+                                                setCurrentPhotoIndex(index);
+                                                setShowCarousel(true);
+                                            }}
+                                            className="p-3 bg-white rounded-full text-gray-700 hover:text-blue-600 transition-colors shadow-lg"
+                                            title="Ver en grande"
+                                        >
+                                            <Eye size={20} />
+                                        </button>
                                     </div>
                                 </div>
                                 
-                                {/* Información */}
-                                <div className="p-4">
-                                    <h3 className="font-semibold text-gray-800 mb-1 truncate">{photo.filename || 'Foto familiar'}</h3>
-                                    {photo.description && (
-                                        <p className="text-sm text-gray-600 mb-2 line-clamp-2">{photo.description}</p>
-                                    )}
+                                <div className="p-3">
+                                    <h4 className="font-medium text-gray-800 text-sm mb-2 line-clamp-1">
+                                        {photo.description || 'Sin descripción'}
+                                    </h4>
                                     
-                                    {/* Metadatos */}
-                                    <div className="space-y-1 text-xs text-gray-500">
-                                        <div className="flex items-center">
-                                            <Calendar size={12} className="mr-1 flex-shrink-0" />
-                                            <span>{new Date(photo.date_taken).toLocaleDateString('es-ES')}</span>
-                                        </div>
-                                        {photo.location && (
-                                            <div className="flex items-center">
-                                                <MapPin size={12} className="mr-1 flex-shrink-0" />
-                                                <span className="truncate">{photo.location}</span>
+                                    <div className="space-y-1 mb-3">
+                                        {photo.date_taken && (
+                                            <div className="flex items-center text-xs text-gray-500">
+                                                <Calendar className="h-3 w-3 mr-1" />
+                                                <span>
+                                                    {photo.date_taken === 'Invalid Date' || photo.date_taken === 'unknown' 
+                                                        ? 'Sin fecha' 
+                                                        : new Date(photo.date_taken).toLocaleDateString()
+                                                    }
+                                                </span>
                                             </div>
                                         )}
                                         {photo.people_in_photo && (
-                                            <div className="flex items-center">
-                                                <Users size={12} className="mr-1 flex-shrink-0" />
-                                                <span className="truncate">
-                                                    {photo.people_in_photo.split(',').slice(0, 2).map(p => p.trim()).join(', ')}
-                                                    {photo.people_in_photo.split(',').length > 2 ? ` +${photo.people_in_photo.split(',').length - 2}` : ''}
-                                                </span>
-                                            </div>
-                                        )}
-                                        {photo.tags && (
-                                            <div className="flex items-center">
-                                                <Tag size={12} className="mr-1 flex-shrink-0" />
-                                                <span className="truncate">
-                                                    {photo.tags.split(',').slice(0, 2).map(t => t.trim()).join(', ')}
-                                                    {photo.tags.split(',').length > 2 ? '...' : ''}
-                                                </span>
+                                            <div className="flex items-center text-xs text-gray-500">
+                                                <Users className="h-3 w-3 mr-1" />
+                                                <span className="line-clamp-1">{photo.people_in_photo}</span>
                                             </div>
                                         )}
                                     </div>
-
-                                    {/* Categoría */}
-                                    <div className="flex items-center justify-between mt-3 pt-3 border-t">
-                                        <span className={`text-xs px-2 py-1 rounded-full text-white ${
-                                            categories.find(c => c.id === photo.category)?.color
-                                        }`}>
-                                            {categories.find(c => c.id === photo.category)?.label}
-                                        </span>
-                                        <span className="text-xs text-gray-400">
-                                            {photo.people_in_photo ? photo.people_in_photo.split(',').length : 0} {photo.people_in_photo && photo.people_in_photo.split(',').length === 1 ? 'persona' : 'personas'}
-                                        </span>
+                                    
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex space-x-1">
+                                            <button 
+                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                title="Eliminar"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                        <button 
+                                            onClick={() => {
+                                                const aiPhoto = aiPhotos.find(ai => ai.fileName === photo.filename);
+                                                if (aiPhoto) {
+                                                    setSelectedAiPhoto(aiPhoto);
+                                                    setShowAiPhotoModal(true);
+                                                } else {
+                                                    alert('No hay análisis de IA disponible para esta foto');
+                                                }
+                                            }}
+                                            className="text-xs px-2 py-1 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded transition-colors"
+                                            title="Ver análisis de IA"
+                                        >
+                                            <Wand2 size={12} className="inline mr-1" />
+                                            IA
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -1424,23 +982,53 @@ const FotosFamiliaresPage: React.FC = () => {
                     </div>
                 )}
 
-                {/* Modal de subida mejorado */}
+                {/* Modal de subida */}
                 {showUploadModal && selectedFile && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                         <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
                             <div className="p-6">
-                                {/* Header del modal */}
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="text-2xl font-semibold text-gray-800">📸 Agregar Foto Familiar</h3>
-                                    <button 
-                                        onClick={() => {
-                                            setShowUploadModal(false);
-                                            resetForm();
-                                        }}
-                                        className="p-2 hover:bg-gray-100 rounded-full"
-                                    >
-                                        <X size={20} />
-                                    </button>
+                                    <div className="flex items-center space-x-2">
+                                        {/* Botón para tomar foto con cámara */}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                // En una implementación futura se puede agregar acceso a cámara web
+                                                alert("Función de cámara web próximamente. Por ahora usa 'Seleccionar archivo'.");
+                                            }}
+                                            className="flex items-center space-x-1"
+                                        >
+                                            <Camera size={16} />
+                                            <span>Cámara</span>
+                                        </Button>
+                                        
+                                        {/* Botón para cambiar archivo */}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                fileInputRef.current?.click();
+                                            }}
+                                            className="flex items-center space-x-1"
+                                        >
+                                            <Upload size={16} />
+                                            <span>Cambiar archivo</span>
+                                        </Button>
+                                        
+                                        <button 
+                                            onClick={() => {
+                                                setShowUploadModal(false);
+                                                resetForm();
+                                            }}
+                                            className="p-2 hover:bg-gray-100 rounded-full"
+                                        >
+                                            <X size={20} />
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1454,62 +1042,45 @@ const FotosFamiliaresPage: React.FC = () => {
                                                 className="w-full h-full object-cover"
                                             />
                                         </div>
-                                        <div className="mt-2 text-sm text-gray-500">
-                                            <p>📁 {selectedFile.name}</p>
-                                            <p>📊 {(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                                        </div>
-
-                                        {/* Panel de metadata extraída */}
-                                        {isExtracting && (
-                                            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                                <div className="flex items-center gap-2">
-                                                    <Loader2 size={16} className="animate-spin text-blue-600" />
-                                                    <span className="text-sm text-blue-700">Extrayendo información de la foto...</span>
+                                        <div className="mt-3 space-y-2 text-sm text-gray-600">
+                                            <div className="flex flex-col space-y-1">
+                                                <div>
+                                                    <div className="text-lg">📁</div>
+                                                    <div className="font-medium text-gray-800">{selectedFile.name}</div>
                                                 </div>
-                                            </div>
-                                        )}
-
-                                        {extractedMetadata && showMetadataPanel && (
-                                            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <Wand2 size={16} className="text-green-600" />
-                                                        <h5 className="font-medium text-green-800">Información Detectada</h5>
+                                                
+                                                <div>
+                                                    <div className="text-lg">📊</div>
+                                                    <div>{formatFileSize(selectedFile.size)}</div>
+                                                </div>
+                                                
+                                                <div>
+                                                    <div className="text-lg">📷</div>
+                                                    <div>{photoMetadata?.fileType || selectedFile.type}</div>
+                                                </div>
+                                                
+                                                {photoMetadata?.lastModified && (
+                                                    <div>
+                                                        <div className="text-lg">📅</div>
+                                                        <div>Modificado: {formatDate(photoMetadata.lastModified)}</div>
                                                     </div>
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={applyMetadataToForm}
-                                                        disabled={isApplyingMetadata}
-                                                        className="bg-green-600 hover:bg-green-700 text-white"
-                                                    >
-                                                        {isApplyingMetadata ? (
-                                                            <>
-                                                                <Loader2 size={14} className="mr-1 animate-spin" />
-                                                                Aplicando...
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <Wand2 size={14} className="mr-1" />
-                                                                Aplicar
-                                                            </>
-                                                        )}
-                                                    </Button>
-                                                </div>
+                                                )}
                                                 
-                                                <div className="space-y-1 text-xs text-green-700">
-                                                    {formatMetadataForDisplay(extractedMetadata).map((item, index) => (
-                                                        <div key={index}>{item}</div>
-                                                    ))}
-                                                </div>
+                                                {photoMetadata?.dimensions && (
+                                                    <div>
+                                                        <div className="text-lg">�</div>
+                                                        <div>{photoMetadata.dimensions.width} × {photoMetadata.dimensions.height} px</div>
+                                                    </div>
+                                                )}
                                                 
-                                                {formatMetadataForDisplay(extractedMetadata).length === 0 && (
-                                                    <p className="text-xs text-green-600">
-                                                        <Info size={12} className="inline mr-1" />
-                                                        No se encontró metadata útil en esta imagen
-                                                    </p>
+                                                {photoMetadata?.aspectRatio && (
+                                                    <div>
+                                                        <div className="text-lg">📏</div>
+                                                        <div>Relación: {photoMetadata.aspectRatio}:1</div>
+                                                    </div>
                                                 )}
                                             </div>
-                                        )}
+                                        </div>
                                     </div>
 
                                     {/* Formulario de metadatos */}
@@ -1523,82 +1094,155 @@ const FotosFamiliaresPage: React.FC = () => {
                                                     value={formData.description}
                                                     onChange={handleFormChange}
                                                     rows={3}
-                                                    placeholder="Describe qué está pasando en la foto, el contexto, emociones..."
+                                                    placeholder="Describe qué está pasando en la foto..."
                                                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 />
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-medium mb-1">Fecha tomada *</label>
-                                                <input
-                                                    type="date"
-                                                    name="date_taken"
-                                                    value={formData.date_taken}
-                                                    onChange={handleFormChange}
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                />
+                                                <label className="block text-sm font-medium mb-1">Fecha y hora tomada *</label>
+                                                
+                                                {/* Botones de acceso rápido */}
+                                                <div className="flex flex-wrap gap-2 mb-3">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            const now = new Date();
+                                                            const dateStr = now.toISOString().split('T')[0];
+                                                            const timeStr = now.toTimeString().split(' ')[0];
+                                                            
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                date_taken: dateStr
+                                                            }));
+                                                            setPhotoTime(timeStr);
+                                                        }}
+                                                        className="flex items-center space-x-1"
+                                                    >
+                                                        <Clock size={14} />
+                                                        <span>Ahora</span>
+                                                    </Button>
+                                                    
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            const yesterday = new Date();
+                                                            yesterday.setDate(yesterday.getDate() - 1);
+                                                            const dateStr = yesterday.toISOString().split('T')[0];
+                                                            
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                date_taken: dateStr
+                                                            }));
+                                                        }}
+                                                        className="flex items-center space-x-1"
+                                                    >
+                                                        <Calendar size={14} />
+                                                        <span>Ayer</span>
+                                                    </Button>
+
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            // Intentar extraer fecha de metadatos EXIF
+                                                            if (selectedFile) {
+                                                                const reader = new FileReader();
+                                                                reader.onload = () => {
+                                                                    // En una implementación real, aquí usarías una librería como exif-js
+                                                                    // Por ahora, usamos la fecha de modificación del archivo
+                                                                    const fileDate = new Date(selectedFile.lastModified);
+                                                                    const dateStr = fileDate.toISOString().split('T')[0];
+                                                                    const timeStr = fileDate.toTimeString().split(' ')[0];
+                                                                    
+                                                                    setFormData(prev => ({
+                                                                        ...prev,
+                                                                        date_taken: dateStr
+                                                                    }));
+                                                                    setPhotoTime(timeStr);
+                                                                };
+                                                                reader.readAsArrayBuffer(selectedFile);
+                                                            }
+                                                        }}
+                                                        className="flex items-center space-x-1"
+                                                    >
+                                                        <Camera size={14} />
+                                                        <span>Del archivo</span>
+                                                    </Button>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label className="text-xs text-gray-500 mb-1 block">Fecha:</label>
+                                                        <input
+                                                            type="date"
+                                                            name="date_taken"
+                                                            value={formData.date_taken}
+                                                            onChange={handleFormChange}
+                                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs text-gray-500 mb-1 block">Hora (opcional):</label>
+                                                        <input
+                                                            type="time"
+                                                            step="1"
+                                                            value={photoTime}
+                                                            onChange={handleTimeChange}
+                                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        />
+                                                    </div>
+                                                </div>
                                             </div>
 
                                             <div>
                                                 <label className="block text-sm font-medium mb-1">Ubicación</label>
-                                                
-                                                {/* Selectores de País y Destino */}
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                                                    {/* Selector de País */}
-                                                    <div>
-                                                        <label className="text-xs text-gray-500 mb-1 block">País:</label>
-                                                        <select
-                                                            name="country"
-                                                            value={formData.country}
-                                                            onChange={handleCountryChange}
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                        >
-                                                            <option value="todos">Seleccionar país</option>
-                                                            {Object.entries(popularCountries).map(([key, country]) => {
-                                                                if (key === 'todos') return null;
-                                                                return (
-                                                                    <option key={key} value={key}>
-                                                                        {country.name}
-                                                                    </option>
+                                                <div className="flex gap-2 mb-2">
+                                                    <div className="flex-1">
+                                                        <input
+                                                            type="text"
+                                                            name="location"
+                                                            value={formData.location}
+                                                            onChange={handleFormChange}
+                                                            placeholder="Ej: México, Playa de Cancún | España, Madrid..."
+                                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        />
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            if (navigator.geolocation) {
+                                                                navigator.geolocation.getCurrentPosition(
+                                                                    (position) => {
+                                                                        const lat = position.coords.latitude;
+                                                                        const lng = position.coords.longitude;
+                                                                        // En una implementación real, usarías geocoding reverso
+                                                                        setFormData(prev => ({
+                                                                            ...prev,
+                                                                            location: `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`
+                                                                        }));
+                                                                    },
+                                                                    (error) => {
+                                                                        console.error('Error obteniendo ubicación:', error);
+                                                                        alert('No se pudo obtener la ubicación. Verifica los permisos del navegador.');
+                                                                    }
                                                                 );
-                                                            })}
-                                                        </select>
-                                                    </div>
-
-                                                    {/* Selector de Destino */}
-                                                    <div>
-                                                        <label className="text-xs text-gray-500 mb-1 block">Destino:</label>
-                                                        <select
-                                                            name="place"
-                                                            value={formData.place}
-                                                            onChange={handleDestinationChange}
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                            disabled={formData.country === 'todos' || formAvailableDestinations.length === 0}
-                                                        >
-                                                            <option value="todos">Seleccionar destino</option>
-                                                            {formAvailableDestinations.map(destination => (
-                                                                <option key={destination} value={destination}>
-                                                                    {destination}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                </div>
-
-                                                {/* Campo de ubicación libre */}
-                                                <div className="mt-3">
-                                                    <label className="text-xs text-gray-500 mb-1 block">Escribe una ubicación personalizada:</label>
-                                                    <input
-                                                        type="text"
-                                                        name="location"
-                                                        value={formData.location}
-                                                        onChange={handleFormChange}
-                                                        placeholder="Ej: México, Playa de Cancún | España, Madrid | Casa de la abuela..."
-                                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                    />
-                                                    <p className="text-xs text-gray-400 mt-1">
-                                                        💡 Sugerimos empezar con el país, luego el lugar específico (Ej: Francia, París)
-                                                    </p>
+                                                            } else {
+                                                                alert('Tu navegador no soporta geolocalización.');
+                                                            }
+                                                        }}
+                                                        className="flex items-center space-x-1 whitespace-nowrap"
+                                                    >
+                                                        <MapPin size={14} />
+                                                        <span>Ubicación actual</span>
+                                                    </Button>
                                                 </div>
                                             </div>
 
@@ -1612,7 +1256,6 @@ const FotosFamiliaresPage: React.FC = () => {
                                                     placeholder="Ej: Mamá, Papá, María, Juan (separados por comas)"
                                                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 />
-                                                <p className="text-xs text-gray-500 mt-1">Separa los nombres con comas</p>
                                             </div>
 
                                             <div>
@@ -1630,39 +1273,43 @@ const FotosFamiliaresPage: React.FC = () => {
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-medium mb-1">Tipo de Evento *</label>
-                                                <select
-                                                    name="event_type"
-                                                    value={formData.event_type}
-                                                    onChange={handleFormChange}
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                >
-                                                    <option key="general" value="general">General</option>
-                                                    <option key="cumpleanos" value="cumpleanos">Cumpleaños</option>
-                                                    <option key="reuniones" value="reuniones">Reuniones Familiares</option>
-                                                    <option key="vacaciones" value="vacaciones">Vacaciones</option>
-                                                    <option key="navidad" value="navidad">Navidad</option>
-                                                    <option key="graduaciones" value="graduaciones">Graduaciones</option>
-                                                    <option key="bodas" value="bodas">Bodas</option>
-                                                    <option key="bautizos" value="bautizos">Bautizos</option>
-                                                    <option key="deportes" value="deportes">Deportes</option>
-                                                    <option key="viajes" value="viajes">Viajes</option>
-                                                    <option key="cotidiano" value="cotidiano">Vida Cotidiana</option>
-                                                </select>
-                                                <p className="text-xs text-gray-500 mt-1">Ayuda a organizar las fotos en carpetas específicas</p>
-                                            </div>
-
-                                            <div>
                                                 <label className="block text-sm font-medium mb-1">Etiquetas</label>
-                                                <input
-                                                    type="text"
-                                                    name="tags"
-                                                    value={formData.tags}
-                                                    onChange={handleFormChange}
-                                                    placeholder="Ej: cumpleaños, sorpresa, felicidad (separadas por comas)"
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                />
-                                                <p className="text-xs text-gray-500 mt-1">Palabras clave para encontrar la foto fácilmente</p>
+                                                <div className="space-y-2">
+                                                    <input
+                                                        type="text"
+                                                        name="tags"
+                                                        value={formData.tags}
+                                                        onChange={handleFormChange}
+                                                        placeholder="Ej: cumpleaños, sorpresa, felicidad (separadas por comas)"
+                                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    />
+                                                    
+                                                    {/* Etiquetas sugeridas */}
+                                                    <div className="flex flex-wrap gap-1">
+                                                        <span className="text-xs text-gray-500 mr-2">Sugerencias:</span>
+                                                        {['familia', 'vacaciones', 'cumpleaños', 'celebración', 'amor', 'diversión', 'recuerdo'].map(tag => (
+                                                            <Button
+                                                                key={tag}
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    const currentTags = formData.tags ? formData.tags.split(',').map(t => t.trim()) : [];
+                                                                    if (!currentTags.includes(tag)) {
+                                                                        const newTags = [...currentTags, tag].join(', ');
+                                                                        setFormData(prev => ({
+                                                                            ...prev,
+                                                                            tags: newTags
+                                                                        }));
+                                                                    }
+                                                                }}
+                                                                className="text-xs h-6 px-2"
+                                                            >
+                                                                +{tag}
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -1693,406 +1340,277 @@ const FotosFamiliaresPage: React.FC = () => {
                     </div>
                 )}
 
-                {/* Modal para ver detalles de la foto */}
-                {viewingPhoto && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] overflow-auto">
-                            <div className="flex items-center justify-between p-6 border-b">
-                                <h2 className="text-2xl font-bold text-gray-800">{viewingPhoto.filename || 'Foto Familiar'}</h2>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => {
-                                            setViewingPhoto(null);
-                                            handleOpenCarousel(viewingPhoto);
-                                        }}
-                                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                                        title="Ver en carrusel"
-                                    >
-                                        <Maximize2 size={18} />
-                                        <span>Carrusel</span>
-                                    </button>
-                                    <button
-                                        onClick={() => handleDownloadPhoto(viewingPhoto)}
-                                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                                        title="Descargar foto"
-                                    >
-                                        <Download size={18} />
-                                        <span>Descargar</span>
-                                    </button>
-                                    <button
-                                        onClick={() => setViewingPhoto(null)}
-                                        className="text-gray-500 hover:text-gray-700 transition-colors"
-                                    >
-                                        <X size={24} />
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div className="p-6">
-                                <div className="grid md:grid-cols-2 gap-6">
-                                    {/* Imagen */}
-                                    <div className="space-y-4">
-                                        <img 
-                                            src={viewingPhoto.display_url || viewingPhoto.photo_url} 
-                                            alt={viewingPhoto.filename || 'Family photo'}
-                                            className="w-full rounded-lg shadow-lg"
-                                        />
-                                    </div>
-                                    
-                                    {/* Detalles */}
-                                    <div className="space-y-4">
-                                        {viewingPhoto.description && (
-                                            <div>
-                                                <h3 className="font-semibold text-gray-800 mb-2">Descripción</h3>
-                                                <p className="text-gray-600">{viewingPhoto.description}</p>
-                                            </div>
-                                        )}
-                                        
-                                        <div>
-                                            <h3 className="font-semibold text-gray-800 mb-2">Información</h3>
-                                            <div className="space-y-2 text-sm">
-                                                <div className="flex items-center">
-                                                    <Calendar size={16} className="mr-2 text-gray-500" />
-                                                    <span>{new Date(viewingPhoto.date_taken).toLocaleDateString('es-ES', {
-                                                        year: 'numeric',
-                                                        month: 'long',
-                                                        day: 'numeric'
-                                                    })}</span>
-                                                </div>
-                                                {viewingPhoto.location && (
-                                                    <div className="flex items-center">
-                                                        <MapPin size={16} className="mr-2 text-gray-500" />
-                                                        <span>{viewingPhoto.location}</span>
-                                                    </div>
-                                                )}
-                                                <div className="flex items-center">
-                                                    <Tag size={16} className="mr-2 text-gray-500" />
-                                                    <span className={`px-2 py-1 rounded-full text-white text-xs ${
-                                                        categories.find(c => c.id === viewingPhoto.category)?.color
-                                                    }`}>
-                                                        {categories.find(c => c.id === viewingPhoto.category)?.label}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        {viewingPhoto.people_in_photo && (
-                                            <div>
-                                                <h3 className="font-semibold text-gray-800 mb-2">Personas en la foto</h3>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {viewingPhoto.people_in_photo.split(',').map((person, index) => (
-                                                        <span 
-                                                            key={index}
-                                                            className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-                                                        >
-                                                            {person.trim()}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                        
-                                        {viewingPhoto.tags && (
-                                            <div>
-                                                <h3 className="font-semibold text-gray-800 mb-2">Etiquetas</h3>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {viewingPhoto.tags.split(',').map((tag, index) => (
-                                                        <span 
-                                                            key={index}
-                                                            className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
-                                                        >
-                                                            #{tag.trim()}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 {/* Modal Carrusel de fotos */}
                 {showCarousel && filteredPhotos.length > 0 && (
-                    <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+                    <div className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-50">
                         {/* Botón cerrar */}
                         <button
-                            onClick={handleCloseCarousel}
-                            className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10"
+                            onClick={() => setShowCarousel(false)}
+                            className="absolute top-2 right-2 sm:top-4 sm:right-4 text-white hover:text-gray-300 transition-colors z-20 p-2 rounded-full bg-black bg-opacity-50 hover:bg-opacity-70"
                         >
-                            <X size={32} />
+                            <X size={24} className="sm:w-8 sm:h-8" />
                         </button>
 
-                        {/* Flecha izquierda */}
-                        <button
-                            onClick={handlePreviousPhoto}
-                            className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 transition-colors z-10 p-2 rounded-full bg-black bg-opacity-50 hover:bg-opacity-70"
-                            disabled={filteredPhotos.length <= 1}
-                        >
-                            <ChevronLeft size={32} />
-                        </button>
+                        {/* Navegación izquierda */}
+                        {filteredPhotos.length > 1 && (
+                            <button
+                                onClick={() => setCurrentPhotoIndex(prev => 
+                                    prev === 0 ? filteredPhotos.length - 1 : prev - 1
+                                )}
+                                className="absolute left-2 sm:left-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 transition-colors z-20 p-2 sm:p-3 rounded-full bg-black bg-opacity-50 hover:bg-opacity-70"
+                            >
+                                <ChevronLeft size={24} className="sm:w-8 sm:h-8" />
+                            </button>
+                        )}
 
-                        {/* Flecha derecha */}
-                        <button
-                            onClick={handleNextPhoto}
-                            className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 transition-colors z-10 p-2 rounded-full bg-black bg-opacity-50 hover:bg-opacity-70"
-                            disabled={filteredPhotos.length <= 1}
-                        >
-                            <ChevronRight size={32} />
-                        </button>
+                        {/* Navegación derecha */}
+                        {filteredPhotos.length > 1 && (
+                            <button
+                                onClick={() => setCurrentPhotoIndex(prev => 
+                                    prev === filteredPhotos.length - 1 ? 0 : prev + 1
+                                )}
+                                className="absolute right-2 sm:right-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 transition-colors z-20 p-2 sm:p-3 rounded-full bg-black bg-opacity-50 hover:bg-opacity-70"
+                            >
+                                <ChevronRight size={24} className="sm:w-8 sm:h-8" />
+                            </button>
+                        )}
 
-                        {/* Imagen principal */}
-                        <div className="flex flex-col items-center justify-center max-w-full max-h-full p-8">
-                            <img
-                                src={filteredPhotos[currentPhotoIndex]?.display_url || filteredPhotos[currentPhotoIndex]?.photo_url}
-                                alt={filteredPhotos[currentPhotoIndex]?.description || 'Foto familiar'}
-                                className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
-                            />
+                        {/* Contenido principal */}
+                        <div className="flex flex-col items-center justify-center w-full h-full p-4 sm:p-8">
+                            {/* Imagen principal */}
+                            <div className="relative max-w-full max-h-[70vh] sm:max-h-[75vh]">
+                                <img
+                                    src={filteredPhotos[currentPhotoIndex]?.display_url || filteredPhotos[currentPhotoIndex]?.photo_url}
+                                    alt={filteredPhotos[currentPhotoIndex]?.description || 'Foto familiar'}
+                                    className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                                    loading="lazy"
+                                />
+                                
+                                {/* Indicador de carga para siguientes imágenes */}
+                                {filteredPhotos.length > 1 && (
+                                    <>
+                                        {/* Precargar imagen anterior */}
+                                        <img
+                                            src={filteredPhotos[currentPhotoIndex === 0 ? filteredPhotos.length - 1 : currentPhotoIndex - 1]?.display_url || filteredPhotos[currentPhotoIndex === 0 ? filteredPhotos.length - 1 : currentPhotoIndex - 1]?.photo_url}
+                                            alt="Preload"
+                                            className="hidden"
+                                            loading="lazy"
+                                        />
+                                        {/* Precargar imagen siguiente */}
+                                        <img
+                                            src={filteredPhotos[currentPhotoIndex === filteredPhotos.length - 1 ? 0 : currentPhotoIndex + 1]?.display_url || filteredPhotos[currentPhotoIndex === filteredPhotos.length - 1 ? 0 : currentPhotoIndex + 1]?.photo_url}
+                                            alt="Preload"
+                                            className="hidden"
+                                            loading="lazy"
+                                        />
+                                    </>
+                                )}
+                            </div>
                             
                             {/* Información de la foto */}
-                            <div className="mt-4 text-center text-white">
-                                <h3 className="text-xl font-semibold mb-2">
+                            <div className="mt-4 text-center text-white max-w-4xl">
+                                <h3 className="text-lg sm:text-xl font-semibold mb-2">
                                     {filteredPhotos[currentPhotoIndex]?.filename || 'Foto familiar'}
                                 </h3>
-                                <div className="flex items-center justify-center gap-4 text-sm text-gray-300">
-                                    <span>{currentPhotoIndex + 1} de {filteredPhotos.length}</span>
-                                    {filteredPhotos[currentPhotoIndex]?.date_taken && (
-                                        <span>
-                                            {new Date(filteredPhotos[currentPhotoIndex].date_taken).toLocaleDateString('es-ES')}
+                                
+                                {/* Metadatos */}
+                                <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-300 mb-3">
+                                    <span className="bg-black bg-opacity-30 px-2 py-1 rounded">
+                                        {currentPhotoIndex + 1} de {filteredPhotos.length}
+                                    </span>
+                                    {filteredPhotos[currentPhotoIndex]?.date_taken && filteredPhotos[currentPhotoIndex]?.date_taken !== 'Invalid Date' && (
+                                        <span className="bg-black bg-opacity-30 px-2 py-1 rounded">
+                                            📅 {new Date(filteredPhotos[currentPhotoIndex].date_taken).toLocaleDateString('es-ES')}
                                         </span>
                                     )}
                                     {filteredPhotos[currentPhotoIndex]?.location && (
-                                        <span>{filteredPhotos[currentPhotoIndex].location}</span>
+                                        <span className="bg-black bg-opacity-30 px-2 py-1 rounded">
+                                            📍 {filteredPhotos[currentPhotoIndex].location}
+                                        </span>
+                                    )}
+                                    {filteredPhotos[currentPhotoIndex]?.category && (
+                                        <span className="bg-black bg-opacity-30 px-2 py-1 rounded">
+                                            🏷️ {filteredPhotos[currentPhotoIndex].category}
+                                        </span>
                                     )}
                                 </div>
+                                
+                                {/* Descripción */}
                                 {filteredPhotos[currentPhotoIndex]?.description && (
-                                    <p className="mt-2 text-gray-300 max-w-md">
+                                    <p className="text-sm sm:text-base text-gray-300 leading-relaxed max-w-2xl mx-auto">
                                         {filteredPhotos[currentPhotoIndex].description}
                                     </p>
                                 )}
                                 
-                                {/* Botones de acción en carrusel */}
-                                <div className="flex items-center justify-center gap-2 mt-4">
-                                    <button
-                                        onClick={() => handleDownloadPhoto(filteredPhotos[currentPhotoIndex])}
-                                        className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                                        title="Descargar foto"
-                                    >
-                                        <Download size={16} />
-                                        <span>Descargar</span>
-                                    </button>
-                                </div>
+                                {/* Personas en la foto */}
+                                {filteredPhotos[currentPhotoIndex]?.people_in_photo && (
+                                    <p className="mt-2 text-xs sm:text-sm text-gray-400">
+                                        👥 {filteredPhotos[currentPhotoIndex].people_in_photo}
+                                    </p>
+                                )}
                             </div>
+
+                            {/* Miniaturas navegación */}
+                            {filteredPhotos.length > 1 && (
+                                <div className="mt-6 w-full">
+                                    <div className="flex justify-center">
+                                        <div className="flex space-x-2 max-w-full overflow-x-auto pb-2 px-4">
+                                            {filteredPhotos.map((photo, index) => (
+                                                <button
+                                                    key={photo.photo_id}
+                                                    onClick={() => setCurrentPhotoIndex(index)}
+                                                    className={`flex-shrink-0 w-20 h-20 sm:w-16 sm:h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                                                        index === currentPhotoIndex 
+                                                            ? 'border-white shadow-lg ring-2 ring-white ring-opacity-50' 
+                                                            : 'border-gray-600 hover:border-gray-400'
+                                                    }`}
+                                                >
+                                                    <img
+                                                        src={photo.display_url || photo.photo_url}
+                                                        alt={`Miniatura ${index + 1}`}
+                                                        className="w-full h-full object-cover"
+                                                        loading="lazy"
+                                                    />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Indicadores de puntos */}
-                        {filteredPhotos.length > 1 && (
-                            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
-                                {filteredPhotos.map((_, index) => (
-                                    <button
-                                        key={index}
-                                        onClick={() => setCurrentPhotoIndex(index)}
-                                        className={`w-3 h-3 rounded-full transition-colors ${
-                                            index === currentPhotoIndex 
-                                                ? 'bg-white' 
-                                                : 'bg-white bg-opacity-50 hover:bg-opacity-75'
-                                        }`}
-                                    />
-                                ))}
-                            </div>
-                        )}
+                        {/* Indicador de ayuda de teclado (solo desktop) */}
+                        <div className="hidden sm:block absolute bottom-4 left-4 text-gray-400 text-xs">
+                            <p>💡 Usa ← → para navegar, ESC para cerrar</p>
+                        </div>
                     </div>
                 )}
 
-                {/* Modal de edición de foto */}
-                {showEditModal && editingPhoto && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-lg font-semibold text-gray-800">
-                                    Editar Foto: {editingPhoto.filename}
-                                </h3>
-                                <button
-                                    onClick={handleCloseEditModal}
-                                    className="text-gray-500 hover:text-gray-700"
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
-
-                            {/* Vista previa de la foto */}
-                            <div className="mb-6">
-                                <img
-                                    src={editingPhoto.photo_url}
-                                    alt={editingPhoto.description || editingPhoto.filename}
-                                    className="w-full h-48 object-cover rounded-lg"
-                                />
-                            </div>
-
-                            {/* Formulario de edición */}
-                            <div className="space-y-4">
-                                {/* Descripción */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Descripción:
-                                    </label>
-                                    <textarea
-                                        name="description"
-                                        value={editFormData.description}
-                                        onChange={handleEditFormChange}
-                                        rows={3}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Describe esta foto..."
-                                    />
-                                </div>
-
-                                {/* Fecha */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Fecha tomada:
-                                    </label>
-                                    <input
-                                        type="date"
-                                        name="date_taken"
-                                        value={editFormData.date_taken}
-                                        onChange={handleEditFormChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-
-                                {/* Ubicación */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Ubicación:
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="location"
-                                        value={editFormData.location}
-                                        onChange={handleEditFormChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Ej: París, Francia"
-                                    />
-                                </div>
-
-                                {/* País */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        País:
-                                    </label>
-                                    <select
-                                        name="country"
-                                        value={editFormData.country}
-                                        onChange={handleEditFormChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                {/* Modal de Análisis de IA */}
+                {showAiPhotoModal && selectedAiPhoto && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+                        <div className="bg-white rounded-lg w-full max-w-7xl max-h-[95vh] overflow-y-auto">
+                            <div className="p-4 sm:p-6">
+                                <div className="flex items-center justify-between mb-4 sm:mb-6">
+                                    <h3 className="text-xl sm:text-2xl font-bold text-gray-800 flex items-center space-x-2">
+                                        <Wand2 className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" />
+                                        <span>Análisis de IA - Foto</span>
+                                    </h3>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowAiPhotoModal(false)}
+                                        className="flex items-center space-x-1"
                                     >
-                                        <option value="todos">Todos los países</option>
-                                        {Object.entries(popularCountries).map(([key, country]) => (
-                                            <option key={key} value={key}>
-                                                {country.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        <X className="h-4 w-4" />
+                                        <span className="hidden sm:inline">Cerrar</span>
+                                    </Button>
                                 </div>
 
-                                {/* Lugar específico */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Lugar específico:
-                                    </label>
-                                    <select
-                                        name="place"
-                                        value={editFormData.place}
-                                        onChange={handleEditFormChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        <option value="todos">Todos los lugares</option>
-                                        {editFormData.country !== 'todos' && 
-                                            popularCountries[editFormData.country as keyof typeof popularCountries]?.destinations?.map((dest) => (
-                                                <option key={dest} value={dest}>
-                                                    {dest}
-                                                </option>
-                                            ))
-                                        }
-                                    </select>
-                                </div>
+                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+                                    <div className="space-y-4">
+                                        <div className="aspect-video sm:aspect-square relative rounded-lg overflow-hidden">
+                                            <img 
+                                                src={selectedAiPhoto.url || '/placeholder-image.jpg'} 
+                                                alt={selectedAiPhoto.descripcionGenerica || 'Foto'} 
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => {
+                                                    const img = e.target as HTMLImageElement;
+                                                    img.src = '/placeholder-image.jpg';
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="text-xs sm:text-sm text-gray-500 space-y-1">
+                                            <p><strong>Archivo:</strong> <span className="break-all">{selectedAiPhoto.fileName || 'No disponible'}</span></p>
+                                            <p><strong>ID:</strong> <span className="break-all">{selectedAiPhoto.id || 'No disponible'}</span></p>
+                                        </div>
+                                    </div>
 
-                                {/* Personas en la foto */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Personas en la foto:
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="people_in_photo"
-                                        value={editFormData.people_in_photo}
-                                        onChange={handleEditFormChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Ej: María, Juan, Pedro"
-                                    />
-                                </div>
+                                    <div className="space-y-4 sm:space-y-6">
+                                        <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                                            <h4 className="font-semibold text-gray-800 mb-2 flex items-center space-x-2">
+                                                <Info className="h-4 w-4 text-blue-600" />
+                                                <span className="text-sm sm:text-base">Descripción General</span>
+                                            </h4>
+                                            <p className="text-sm sm:text-base text-gray-700 leading-relaxed">{selectedAiPhoto.descripcionGenerica || 'No disponible'}</p>
+                                        </div>
 
-                                {/* Etiquetas */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Etiquetas:
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="tags"
-                                        value={editFormData.tags}
-                                        onChange={handleEditFormChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Ej: vacaciones, familia, cumpleaños"
-                                    />
-                                </div>
-
-                                {/* Categoría */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Categoría:
-                                    </label>
-                                    <select
-                                        name="category"
-                                        value={editFormData.category}
-                                        onChange={handleEditFormChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        <option value="familia">👨‍👩‍👧‍👦 Familia</option>
-                                        <option value="viajes">✈️ Viajes</option>
-                                        <option value="eventos">🎉 Eventos</option>
-                                        <option value="cotidiano">🏠 Cotidiano</option>
-                                        <option value="trabajo">💼 Trabajo</option>
-                                        <option value="hobbies">🎨 Hobbies</option>
-                                        <option value="mascotas">🐕 Mascotas</option>
-                                        <option value="comida">🍽️ Comida</option>
-                                        <option value="naturaleza">🌿 Naturaleza</option>
-                                        <option value="deportes">⚽ Deportes</option>
-                                        <option value="celebraciones">🎊 Celebraciones</option>
-                                        <option value="otros">📋 Otros</option>
-                                    </select>
+                                        {selectedAiPhoto.detailsHTML && (
+                                            <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                                                <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">📄 Análisis Detallado</h4>
+                                                <div 
+                                                    className="text-xs sm:text-sm text-gray-700 prose prose-sm max-w-none overflow-hidden"
+                                                    dangerouslySetInnerHTML={{ __html: processAiAnalysisHTML(selectedAiPhoto.detailsHTML) }}
+                                                    style={{ 
+                                                        wordBreak: 'break-word',
+                                                        overflowWrap: 'break-word'
+                                                    }}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                )}
 
-                            {/* Botones del modal */}
-                            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-                                <button
-                                    onClick={handleCloseEditModal}
-                                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
-                                    disabled={isLoading}
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={handleSaveEditedPhoto}
-                                    disabled={isLoading}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                >
-                                    {isLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>}
-                                    {isLoading ? 'Guardando...' : 'Guardar Cambios'}
-                                </button>
+                {/* Modal de Progreso de Análisis de IA */}
+                {showAiProcessingModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-lg max-w-md w-full p-6">
+                            <div className="text-center">
+                                <div className="mb-4">
+                                    <div className="mx-auto w-16 h-16 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center mb-4">
+                                        <svg className="w-8 h-8 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                                            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle>
+                                            <path fill="currentColor" className="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    </div>
+                                    <h3 className="text-xl font-semibold text-gray-800 mb-2">🤖 Análisis de IA en Progreso</h3>
+                                    <p className="text-sm text-gray-600 mb-4">
+                                        Nuestro sistema de inteligencia artificial está analizando tu foto para generar una descripción detallada y extraer información valiosa.
+                                    </p>
+                                </div>
+
+                                {/* Progress Bar */}
+                                <div className="mb-4">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-sm font-medium text-gray-700">Progreso</span>
+                                        <span className="text-sm font-medium text-blue-600">{aiProcessingProgress}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-3">
+                                        <div 
+                                            className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-300 ease-out"
+                                            style={{ width: `${aiProcessingProgress}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+
+                                {/* Current Step */}
+                                <div className="text-sm text-gray-700 mb-6">
+                                    <div className="flex items-center justify-center space-x-2">
+                                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                                        <span>{aiProcessingStep}</span>
+                                    </div>
+                                </div>
+
+                                {/* AI Features List */}
+                                <div className="bg-gray-50 rounded-lg p-4 text-left">
+                                    <h4 className="text-sm font-semibold text-gray-800 mb-3">🎯 Qué está analizando la IA:</h4>
+                                    <ul className="text-xs text-gray-600 space-y-1">
+                                        <li>• 👥 Detección de personas y expresiones</li>
+                                        <li>• 🏠 Identificación de objetos y lugares</li>
+                                        <li>• 🎨 Análisis de colores y composición</li>
+                                        <li>• 😊 Reconocimiento de emociones</li>
+                                        <li>• 📝 Generación de descripción inteligente</li>
+                                        <li>• 🏷️ Creación automática de etiquetas</li>
+                                    </ul>
+                                </div>
+
+                                <div className="mt-4 text-xs text-gray-500">
+                                    Este proceso toma unos segundos y mejorará la búsqueda y organización de tus fotos.
+                                </div>
                             </div>
                         </div>
                     </div>

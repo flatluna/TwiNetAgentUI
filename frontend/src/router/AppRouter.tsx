@@ -42,6 +42,7 @@ import ConfiguracionPage from "@/pages/ConfiguracionPage";
 import ChatVoicePage from "@/pages/ChatVoicePage";
 import TwinAgentPage from "@/pages/TwinAgentPage";
 import AIWebSearchPage from "@/pages/AIWebSearchPage";
+import GoogleSearchPage from "@/pages/GoogleSearchPage";
 import TwinCasaPage from "@/pages/TwinCasaPage";
 import CasasPage from "@/pages/CasasPage";
 import CrearCasaPage from "@/pages/CrearCasaPage";
@@ -381,6 +382,10 @@ const router = createBrowserRouter([
             {
                 path: "ai-web-search",
                 element: <ProtectedRoute><AIWebSearchPage /></ProtectedRoute>,
+            },
+            {
+                path: "google-search",
+                element: <ProtectedRoute><GoogleSearchPage /></ProtectedRoute>,
             },
             {
                 path: "mi-patrimonio/twin-hogar",

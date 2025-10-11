@@ -24,7 +24,8 @@ import {
     Brain,
     GraduationCap,
     Archive,
-    Search
+    Search,
+    Globe
 } from "lucide-react";
 import { LoginButton, LogoutButton } from "@/components/LoginButton";
 import { useMsal } from "@azure/msal-react";
@@ -270,6 +271,12 @@ const MainLayout: React.FC = () => {
                     label: "AI Web Search",
                     icon: Search,
                     path: "/ai-web-search"
+                },
+                {
+                    id: "google-search",
+                    label: "Google Search",
+                    icon: Globe,
+                    path: "/google-search"
                 }
             ]
         },

@@ -222,7 +222,9 @@ const DetallesCursoAIPage: React.FC = () => {
                   <div className="w-8 h-8 mx-auto mb-2 bg-orange-500 rounded-lg flex items-center justify-center">
                     <Tag className="w-4 h-4 text-white" />
                   </div>
-                  <div className="text-2xl font-bold text-orange-700">{curso.Etiquetas?.length ?? 0}</div>
+                  <div className="text-2xl font-bold text-orange-700">
+                    {Array.isArray(curso.Etiquetas) ? curso.Etiquetas.length : 0}
+                  </div>
                   <div className="text-xs text-orange-600 font-medium">Etiquetas</div>
                 </div>
                 
@@ -236,7 +238,7 @@ const DetallesCursoAIPage: React.FC = () => {
               </div>
 
               {/* Etiquetas */}
-              {curso.Etiquetas && curso.Etiquetas.length > 0 && (
+              {curso.Etiquetas && Array.isArray(curso.Etiquetas) && curso.Etiquetas.length > 0 && (
                 <div className="mb-6">
                   <h4 className="text-sm font-semibold text-gray-700 mb-3">Etiquetas del curso</h4>
                   <div className="flex flex-wrap gap-2">
