@@ -211,6 +211,8 @@ export interface ImageAI {
     url?: string;
     path?: string;
     fileName?: string;
+    fecha?: string;  // Fecha en formato "2010-10-25 21:04:46"
+    hora?: string;   // Hora en formato "21:04:46"
 }
 
 export interface DescripcionVisualDetallada {
@@ -271,6 +273,57 @@ export interface DetallesMemorables {
     aspectos_destacados: string[];
     importancia_estimada: string;
     valor_sentimental: string;
+}
+
+// Interfaces para búsqueda semántica de fotos familiares (Nueva estructura del backend)
+export interface PictureFoundResponse {
+    pictureId: string;
+    filename: string;
+    path: string;
+    descripcionGenerica: string;
+    pictureContent: string;
+    contextoRecordatorio: string;
+    totalTokens: number;
+    searchScore: number;
+    createdAt: string;
+    highlights: string[];
+}
+
+export interface SearchSummaryResponse {
+    totalFound: number;
+    searchQuery: string;
+    executionTime: string;
+}
+
+export interface FotosAiSearchResponse {
+    htmlResponse: string;
+    picturesFound: PictureFoundResponse[];
+    searchSummary: SearchSummaryResponse;
+}
+
+export interface FamilyPhotosSearchResult {
+    success: boolean;
+    query: string;
+    aiResponse: FotosAiSearchResponse;
+    twinId: string;
+    searchedAt: string;
+}
+
+// Interface legacy (mantener para compatibilidad)
+export interface PicturesFamilySearchResultItem {
+    id: string;
+    twinId: string;
+    fileName: string;
+    url: string;
+    description?: string;
+    category?: string;
+    tags?: string;
+    date_taken?: string;
+    location?: string;
+    people_in_photo?: string;
+    searchScore: number;
+    searchType: string;
+    relevanceReason?: string;
 }
 
 export interface TwinProfileData {
@@ -2542,6 +2595,71 @@ class TwinApiService {
 
             const data = await response.json();
             console.log('✅ Direct API response:', data);
+            
+            return {
+                success: true,
+                data: data,
+                error: undefined
+            };
+        }
+    }
+
+    /**
+     * Search family photos using semantic search
+     */
+    async searchFamilyPictures(
+        twinId: string, 
+        query: string
+    ): Promise<ApiResponse<FamilyPhotosSearchResult>> {
+        console.log('🔍 API Service - Searching family pictures for twin:', twinId, 'with query:', query);
+        
+        const requestBody = {
+            searchText: query
+        };
+
+        // Intentar primero con el proxy de Vite, luego con URL directa si falla
+        try {
+            return await this.makeRequest(`/api/twins/${twinId}/family-photos/search`, {
+                method: 'POST',
+                body: JSON.stringify(requestBody)
+            });
+        } catch (error) {
+            console.warn('⚠️ Proxy failed, trying direct URL to backend...', error);
+            
+            // Fallback: usar URL directa del backend
+            const directUrl = `http://localhost:7011/api/twins/${twinId}/family-photos/search`;
+            console.log('🔄 Making direct API request to:', directUrl);
+            
+            const response = await fetch(directUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': API_KEY,
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`❌ Direct API Error (${response.status}):`, errorText);
+                
+                let errorMessage = `HTTP ${response.status}`;
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    errorMessage = errorJson.detail || errorMessage;
+                } catch {
+                    errorMessage = errorText || errorMessage;
+                }
+                
+                return {
+                    success: false,
+                    data: undefined,
+                    error: errorMessage
+                };
+            }
+
+            const data = await response.json();
+            console.log('✅ Direct API response for search:', data);
             
             return {
                 success: true,
