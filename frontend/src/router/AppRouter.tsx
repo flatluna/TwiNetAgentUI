@@ -7,6 +7,7 @@ import TwinManagePage from "@/pages/TwinManagePage";
 import CursosHomePage from '@/pages/conocimiento/CursosHomePage';
 import TwinBiografiaPage from "@/pages/TwinBiografiaPage";
 import FotosFamiliaresPage from "@/pages/biografia/FotosFamiliaresPage";
+import TwinFotosAgentPage from "@/pages/biografia/TwinFotosAgent";
 import DatosPersonalesPage from "@/pages/biografia/DatosPersonalesPage";
 import ArchivosPersonalesPage from "@/pages/biografia/ArchivosPersonalesPage";
 import ContactosPage from "@/pages/biografia/ContactosPage";
@@ -234,6 +235,14 @@ const router = createBrowserRouter([
             {
                 path: "twin-biografia/fotos",
                 element: <ProtectedRoute><FotosFamiliaresPage /></ProtectedRoute>,
+            },
+            {
+                path: "fotos-familiares",
+                element: <ProtectedRoute><FotosFamiliaresPage /></ProtectedRoute>,
+            },
+            {
+                path: "fotos-agente",
+                element: <ProtectedRoute><TwinFotosAgentPage /></ProtectedRoute>,
             },
             {
                 path: "twin-biografia/datos-personales",

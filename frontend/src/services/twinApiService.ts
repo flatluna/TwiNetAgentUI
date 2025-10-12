@@ -202,17 +202,30 @@ export interface ResumeListResponse {
 export interface ImageAI {
     detailsHTML: string;
     descripcionGenerica: string;
+    descripcionUsuario?: string;  // Descripción del usuario
+    descripcionDetallada?: string | null;
     descripcion_visual_detallada: DescripcionVisualDetallada;
     contexto_emocional: ContextoEmocional;
+    contextoEmocional?: any; // Para compatibilidad con el nuevo formato
     elementos_temporales: ElementosTemporales;
+    elementosTemporales?: any; // Para compatibilidad con el nuevo formato
     detalles_memorables: DetallesMemorables;
+    detallesMemorables?: any; // Para compatibilidad con el nuevo formato
     id?: string;
     TwinID?: string;
+    twinID?: string; // Para compatibilidad
     url?: string;
     path?: string;
     fileName?: string;
     fecha?: string;  // Fecha en formato "2010-10-25 21:04:46"
     hora?: string;   // Hora en formato "21:04:46"
+    // Nuevas propiedades del API
+    category?: string;
+    people?: string; // Personas en la foto
+    places?: string; // Ubicaciones
+    etiquetas?: string; // Etiquetas
+    eventType?: string;
+    totalTokensDescripcionDetallada?: number;
 }
 
 export interface DescripcionVisualDetallada {
@@ -1363,7 +1376,7 @@ class TwinApiService {
     }>> {
         console.log('🔄 Updating family photo:', photoId, 'with complete metadata:', metadata);
         
-        return this.makeRequest(`/api/twins/${twinId}/photos/${photoId}`, {
+        return this.makeRequest(`/api/twins/${twinId}/family-photos/${photoId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -2613,30 +2626,24 @@ class TwinApiService {
     ): Promise<ApiResponse<FamilyPhotosSearchResult>> {
         console.log('🔍 API Service - Searching family pictures for twin:', twinId, 'with query:', query);
         
-        const requestBody = {
-            searchText: query
-        };
-
         // Intentar primero con el proxy de Vite, luego con URL directa si falla
         try {
-            return await this.makeRequest(`/api/twins/${twinId}/family-photos/search`, {
-                method: 'POST',
-                body: JSON.stringify(requestBody)
+            return await this.makeRequest(`/api/twins/${twinId}/search-family-pictures?query=${encodeURIComponent(query)}`, {
+                method: 'GET'
             });
         } catch (error) {
             console.warn('⚠️ Proxy failed, trying direct URL to backend...', error);
             
             // Fallback: usar URL directa del backend
-            const directUrl = `http://localhost:7011/api/twins/${twinId}/family-photos/search`;
+            const directUrl = `http://localhost:7011/api/twins/${twinId}/search-family-pictures?query=${encodeURIComponent(query)}`;
             console.log('🔄 Making direct API request to:', directUrl);
             
             const response = await fetch(directUrl, {
-                method: 'POST',
+                method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-API-Key': API_KEY,
-                },
-                body: JSON.stringify(requestBody)
+                }
             });
 
             if (!response.ok) {

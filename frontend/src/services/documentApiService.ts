@@ -110,19 +110,16 @@ interface DocumentAIAnalysisResponse {
 
 class DocumentAPIService {
     private baseURL: string;
-    private apiKey: string;
 
     constructor() {
         this.baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:7011';
-        this.apiKey = import.meta.env.VITE_API_KEY || '';
     }
 
     /**
-     * Get Authorization header with API key
+     * Get basic headers for requests (no API key required for local development)
      */
     private getAuthHeaders(): Record<string, string> {
         return {
-            'X-API-Key': this.apiKey,
             'Content-Type': 'application/json'
         };
     }

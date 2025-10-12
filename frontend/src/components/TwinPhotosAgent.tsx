@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Send, Camera, Search, Loader2, Image, Calendar, MapPin, Users, Tag } from 'lucide-react';
+import { Send, Camera, Search, Loader2, Image, Calendar, MapPin, Users, Tag, Trash2, Eye, X, Clock } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import twinApiService, { PictureFoundResponse, FamilyPhotosSearchResult } from '@/services/twinApiService';
 
@@ -26,6 +26,7 @@ const TwinPhotosAgent: React.FC<TwinPhotosAgentProps> = ({ onPhotoClick }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [currentMessage, setCurrentMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [selectedPhoto, setSelectedPhoto] = useState<PictureFoundResponse | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const getTwinId = (): string | null => {
@@ -37,6 +38,11 @@ const TwinPhotosAgent: React.FC<TwinPhotosAgentProps> = ({ onPhotoClick }) => {
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    const clearChat = () => {
+        setMessages([]);
+        setCurrentMessage('');
     };
 
     useEffect(() => {
@@ -71,12 +77,12 @@ const TwinPhotosAgent: React.FC<TwinPhotosAgentProps> = ({ onPhotoClick }) => {
             if (response.success && response.data) {
                 const searchResult = response.data;
                 
-                // Mostrar primero el HTML response si existe
+                // Mostrar la respuesta HTML del servidor si existe
                 if (searchResult.aiResponse?.htmlResponse) {
                     const htmlMessage: ChatMessage = {
                         id: (Date.now()).toString(),
                         type: 'html',
-                        content: 'Análisis de IA sobre tus fotos:',
+                        content: 'Respuesta de búsqueda:',
                         timestamp: new Date(),
                         htmlContent: searchResult.aiResponse.htmlResponse,
                         searchQuery: searchResult.query
@@ -84,22 +90,25 @@ const TwinPhotosAgent: React.FC<TwinPhotosAgentProps> = ({ onPhotoClick }) => {
                     setMessages(prev => [...prev, htmlMessage]);
                 }
                 
-                // Luego mostrar las fotos encontradas
+                // Mostrar las fotos encontradas después del HTML
                 if (searchResult.aiResponse?.picturesFound && searchResult.aiResponse.picturesFound.length > 0) {
                     const photosMessage: ChatMessage = {
                         id: (Date.now() + 1).toString(),
                         type: 'photos',
-                        content: `Encontré ${searchResult.aiResponse.picturesFound.length} foto${searchResult.aiResponse.picturesFound.length !== 1 ? 's' : ''} relacionada${searchResult.aiResponse.picturesFound.length !== 1 ? 's' : ''} con: "${searchResult.query}"`,
+                        content: `📸 ${searchResult.aiResponse.picturesFound.length} foto${searchResult.aiResponse.picturesFound.length !== 1 ? 's' : ''} encontrada${searchResult.aiResponse.picturesFound.length !== 1 ? 's' : ''}:`,
                         timestamp: new Date(),
                         photos: searchResult.aiResponse.picturesFound,
                         searchQuery: searchResult.query
                     };
                     setMessages(prev => [...prev, photosMessage]);
-                } else {
+                }
+                
+                // Si no hay HTML ni fotos, mostrar mensaje de error
+                if (!searchResult.aiResponse?.htmlResponse && (!searchResult.aiResponse?.picturesFound || searchResult.aiResponse.picturesFound.length === 0)) {
                     const noResultsMessage: ChatMessage = {
-                        id: (Date.now() + 1).toString(),
+                        id: (Date.now()).toString(),
                         type: 'system',
-                        content: `No encontré fotos relacionadas con: "${currentMessage}"\n\nIntenta con términos diferentes como:\n• Ubicaciones (playa, casa, parque)\n• Personas (familia, niños, amigos)\n• Eventos (cumpleaños, navidad, vacaciones)\n• Objetos (coche, mascota, juguetes)`,
+                        content: `No encontré fotos relacionadas con: "${currentMessage}"`,
                         timestamp: new Date()
                     };
                     setMessages(prev => [...prev, noResultsMessage]);
@@ -142,20 +151,34 @@ const TwinPhotosAgent: React.FC<TwinPhotosAgentProps> = ({ onPhotoClick }) => {
     };
 
     return (
-        <Card className="h-[calc(100vh-6rem)] min-h-[600px] flex flex-col shadow-lg border-2 border-blue-100">
+        <Card className="h-full max-h-full flex flex-col shadow-lg border-2 border-blue-100">
             <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-indigo-50">
-                <CardTitle className="flex items-center gap-2 text-xl font-bold">
-                    <Camera className="h-6 w-6 text-blue-600" />
-                    Twin Fotos Familiares
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <CardTitle className="flex items-center gap-2 text-xl font-bold">
+                            <Camera className="h-6 w-6 text-blue-600" />
+                            Twin Fotos Familiares
+                        </CardTitle>
+                    </div>
+                    <Button
+                        onClick={clearChat}
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs hover:bg-red-50 hover:border-red-200 hover:text-red-600"
+                        title="Limpiar conversación"
+                    >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Limpiar
+                    </Button>
+                </div>
                 <p className="text-sm text-gray-600 font-medium">
                     🤖 Busca y explora tus fotos usando inteligencia artificial
                 </p>
             </CardHeader>
 
-            <CardContent className="flex-1 flex flex-col p-0">
-                {/* Messages Area - Increased height */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50 min-h-[600px]">{messages.map((message) => (
+            <CardContent className="flex-1 flex flex-col p-0 min-h-0">
+                {/* Messages Area - Altura fija con scroll */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50 min-h-0">{messages.map((message) => (
                         <div key={message.id} className={`${message.type === 'user' ? 'ml-4' : 'mr-4'}`}>
                             <div className={`rounded-xl p-4 shadow-sm ${
                                 message.type === 'user' 
@@ -176,19 +199,18 @@ const TwinPhotosAgent: React.FC<TwinPhotosAgentProps> = ({ onPhotoClick }) => {
                                 
                                 {/* Photos Grid */}
                                 {message.photos && message.photos.length > 0 && (
-                                    <div className="mt-3 space-y-2">
+                                    <div className="mt-3 space-y-3">
                                         {message.photos.slice(0, 6).map((photo) => (
                                             <div
                                                 key={photo.pictureId}
-                                                className="bg-white rounded-lg p-3 border cursor-pointer hover:shadow-md transition-shadow"
-                                                onClick={() => onPhotoClick?.(photo)}
+                                                className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
                                             >
-                                                <div className="flex gap-3">
-                                                    <div className="relative w-16 h-16 flex-shrink-0">
+                                                <div className="flex gap-4">
+                                                    <div className="relative w-20 h-20 flex-shrink-0">
                                                         <img
-                                                            src={photo.path}
+                                                            src={photo.url || photo.path}
                                                             alt={photo.descripcionGenerica || photo.filename}
-                                                            className="w-full h-full object-cover rounded"
+                                                            className="w-full h-full object-cover rounded-lg"
                                                             loading="lazy"
                                                         />
                                                         <div className="absolute -top-1 -right-1">
@@ -199,35 +221,50 @@ const TwinPhotosAgent: React.FC<TwinPhotosAgentProps> = ({ onPhotoClick }) => {
                                                     </div>
                                                     
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="text-sm font-medium truncate">
-                                                            {photo.filename}
-                                                        </div>
-                                                        {photo.descripcionGenerica && (
-                                                            <div className="text-xs text-gray-600 mt-1 line-clamp-2">
-                                                                {photo.descripcionGenerica}
+                                                        <div className="flex items-start justify-between">
+                                                            <div className="flex-1">
+                                                                <div className="text-sm font-medium text-gray-900 mb-1">
+                                                                    {photo.filename}
+                                                                </div>
+                                                                {photo.descripcionGenerica && (
+                                                                    <div className="text-xs text-gray-600 mb-2 line-clamp-2">
+                                                                        {photo.descripcionGenerica}
+                                                                    </div>
+                                                                )}
+                                                                
+                                                                <div className="flex flex-wrap gap-1 mb-2">
+                                                                    {photo.createdAt && (
+                                                                        <Badge variant="outline" className="text-xs">
+                                                                            <Calendar className="w-3 h-3 mr-1" />
+                                                                            {new Date(photo.createdAt).toLocaleDateString('es-ES')}
+                                                                        </Badge>
+                                                                    )}
+                                                                    {photo.contextoRecordatorio && (
+                                                                        <Badge variant="outline" className="text-xs">
+                                                                            <MapPin className="w-3 h-3 mr-1" />
+                                                                            {photo.contextoRecordatorio.substring(0, 30)}...
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                                
+                                                                {photo.highlights && photo.highlights.length > 0 && (
+                                                                    <div className="text-xs text-blue-600 font-medium">
+                                                                        🔍 {photo.highlights.slice(0, 2).join(', ')}
+                                                                        {photo.highlights.length > 2 && ` +${photo.highlights.length - 2} más`}
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        )}
-                                                        
-                                                        <div className="flex flex-wrap gap-1 mt-2">
-                                                            {photo.createdAt && (
-                                                                <Badge variant="outline" className="text-xs">
-                                                                    <Calendar className="w-3 h-3 mr-1" />
-                                                                    {new Date(photo.createdAt).toLocaleDateString('es-ES')}
-                                                                </Badge>
-                                                            )}
-                                                            {photo.contextoRecordatorio && (
-                                                                <Badge variant="outline" className="text-xs">
-                                                                    <MapPin className="w-3 h-3 mr-1" />
-                                                                    {photo.contextoRecordatorio}
-                                                                </Badge>
-                                                            )}
+                                                            
+                                                            <Button
+                                                                onClick={() => setSelectedPhoto(photo)}
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="ml-2 flex items-center gap-1"
+                                                            >
+                                                                <Eye className="w-3 h-3" />
+                                                                Ver detalles
+                                                            </Button>
                                                         </div>
-                                                        
-                                                        {photo.highlights && photo.highlights.length > 0 && (
-                                                            <div className="text-xs text-purple-600 mt-1 font-medium">
-                                                                {photo.highlights.join(', ')}
-                                                            </div>
-                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -295,6 +332,121 @@ const TwinPhotosAgent: React.FC<TwinPhotosAgentProps> = ({ onPhotoClick }) => {
                     </div>
                 </div>
             </CardContent>
+
+            {/* Modal de detalles de foto */}
+            {selectedPhoto && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                        {/* Header del modal */}
+                        <div className="flex items-center justify-between p-4 border-b bg-white">
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-800">
+                                    {selectedPhoto.filename}
+                                </h3>
+                                {selectedPhoto.createdAt && (
+                                    <p className="text-sm text-gray-600 mt-1">
+                                        <Calendar className="w-4 h-4 inline mr-1" />
+                                        {new Date(selectedPhoto.createdAt).toLocaleDateString('es-ES')}
+                                    </p>
+                                )}
+                            </div>
+                            <Button
+                                onClick={() => setSelectedPhoto(null)}
+                                variant="outline"
+                                size="sm"
+                            >
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </div>
+
+                        {/* Contenido del modal */}
+                        <div className="flex-1 overflow-hidden">
+                            <div className="h-full flex flex-col lg:flex-row">
+                                {/* Imagen */}
+                                <div className="w-full lg:w-1/2 h-64 lg:h-full bg-gray-100 flex items-center justify-center p-4">
+                                    <img
+                                        src={selectedPhoto.url || selectedPhoto.path}
+                                        alt={selectedPhoto.descripcionGenerica || selectedPhoto.filename}
+                                        className="max-w-full max-h-full object-contain rounded-lg shadow-sm"
+                                    />
+                                </div>
+
+                                {/* Detalles */}
+                                <div className="flex-1 lg:w-1/2 overflow-y-auto p-4 lg:p-6">
+                                    <div className="space-y-4">
+                                        {/* Descripción principal */}
+                                        {selectedPhoto.descripcionGenerica && (
+                                            <div>
+                                                <h4 className="font-semibold text-gray-800 mb-2">📸 Descripción</h4>
+                                                <p className="text-gray-700 text-sm">
+                                                    {selectedPhoto.descripcionGenerica}
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* Contenido detallado */}
+                                        {selectedPhoto.pictureContent && (
+                                            <div>
+                                                <h4 className="font-semibold text-gray-800 mb-2">🔍 Análisis detallado</h4>
+                                                <p className="text-gray-700 text-sm">
+                                                    {selectedPhoto.pictureContent}
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* Contexto */}
+                                        {selectedPhoto.contextoRecordatorio && (
+                                            <div>
+                                                <h4 className="font-semibold text-gray-800 mb-2">📍 Contexto</h4>
+                                                <p className="text-gray-700 text-sm">
+                                                    {selectedPhoto.contextoRecordatorio}
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* Highlights */}
+                                        {selectedPhoto.highlights && selectedPhoto.highlights.length > 0 && (
+                                            <div>
+                                                <h4 className="font-semibold text-gray-800 mb-2">✨ Aspectos destacados</h4>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {selectedPhoto.highlights.map((highlight, index) => (
+                                                        <Badge key={index} variant="secondary" className="text-xs">
+                                                            {highlight}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Información técnica */}
+                                        <div>
+                                            <h4 className="font-semibold text-gray-800 mb-2">ℹ️ Información</h4>
+                                            <div className="space-y-2 text-sm">
+                                                <div className="flex items-center">
+                                                    <span className="font-medium text-gray-600 w-24">ID:</span>
+                                                    <span className="text-gray-800 text-xs break-all">{selectedPhoto.pictureId}</span>
+                                                </div>
+                                                <div className="flex items-center">
+                                                    <span className="font-medium text-gray-600 w-24">Score:</span>
+                                                    <Badge variant="outline" className="text-xs">
+                                                        {formatSearchScore(selectedPhoto.searchScore)}
+                                                    </Badge>
+                                                </div>
+                                                {selectedPhoto.totalTokens && (
+                                                    <div className="flex items-center">
+                                                        <span className="font-medium text-gray-600 w-24">Tokens:</span>
+                                                        <span className="text-gray-800">{selectedPhoto.totalTokens}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </Card>
     );
 };
