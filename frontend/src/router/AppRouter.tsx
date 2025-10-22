@@ -84,6 +84,15 @@ import VerDetallesCapituloPage from "@/pages/conocimiento/VerDetallesCapituloPag
 import BookNotesPage from "@/pages/BookNotesPage";
 import AnalisisAIPage from "@/pages/AnalisisAIPage";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import ArchivosPersonalesHome from "@/pages/ArchivosPersonalesHome";
+import DocumentosEstructuradosNew from "@/pages/biografia/DocumentosEstructurados";
+import DocumentosEstructuradosCSV from "@/pages/biografia/DocumentosEstructuradosCSV";
+import CSVDetallesPage from "@/pages/biografia/CSVDetallesPage";
+import DocumentosSemiEstructuradosNew from "@/pages/DocumentosSemiEstructuradosNew";
+import DocumentosNoEstructuradosNew from "@/pages/DocumentosNoEstructurados";
+import DocumentoViewer from "@/pages/DocumentoViewerNew";
+import FacturasPage from "@/pages/biografia/FacturasPage";
+import InvoicesDashboardPage from "@/pages/biografia/InvoicesDashboardPage";
 
 // Configuración de rutas
 const router = createBrowserRouter([
@@ -250,7 +259,43 @@ const router = createBrowserRouter([
             },
             {
                 path: "twin-biografia/archivos-personales",
-                element: <ProtectedRoute><ArchivosPersonalesPage /></ProtectedRoute>,
+                element: <ProtectedRoute><ArchivosPersonalesHome /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/archivos-personales/estructurados",
+                element: <ProtectedRoute><DocumentosEstructuradosNew /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/archivos-personales/estructurados/csv",
+                element: <ProtectedRoute><DocumentosEstructuradosCSV /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/archivos-personales/estructurados/csv/:csvId",
+                element: <ProtectedRoute><CSVDetallesPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/archivos-personales/semi-estructurados",
+                element: <ProtectedRoute><DocumentosSemiEstructuradosNew /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/facturas",
+                element: <ProtectedRoute><FacturasPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/facturas/dashboard",
+                element: <ProtectedRoute><InvoicesDashboardPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/facturas/dashboard/:vendorName",
+                element: <ProtectedRoute><InvoicesDashboardPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/archivos-personales/no-estructurados",
+                element: <ProtectedRoute><DocumentosNoEstructuradosNew /></ProtectedRoute>,
+            },
+            {
+                path: "twin-biografia/archivos-personales/no-estructurados/documento/:twinId/:documentId",
+                element: <ProtectedRoute><DocumentoViewer /></ProtectedRoute>,
             },
             {
                 path: "twin-biografia/contactos",

@@ -2224,7 +2224,7 @@ class TwinApiService {
                 formData.append('filename', filename);
             }
 
-            const response = await fetch(`${API_BASE_URL}/api/twins/${twinId}/simple-upload-photo`, {
+            const response = await fetch(`${API_BASE_URL}/api/twins/${twinId}/simple-upload-photo/${encodeURIComponent(path)}`, {
                 method: 'POST',
                 headers: {
                     'X-API-Key': API_KEY
@@ -2302,16 +2302,16 @@ class TwinApiService {
         totalFiles?: number;
         directory?: string;
     }>> {
-        // Construir el path para listar fotos
+        // Construir el path para listar fotos - homes/casaId/photos/zona formato
         const path = zona 
-            ? `homes/${photoId}/photos/${zona}`
-            : `homes/${photoId}/photos`;
+            ? `homes/${photoId}/photos/${zona}`  // Formato: homes/casaId/photos/zona
+            : `homes/${photoId}/photos`;          // homes/casaId/photos si no hay zona específica
         
         console.log('📋 API Service - Listing photos for twin:', twinId, 'path:', path);
         
         try {
-            // Usar el nuevo endpoint específico para photos por path
-            const response = await fetch(`${API_BASE_URL}/api/twins/${twinId}/photos-by-path?path=${encodeURIComponent(path)}`, {
+            // Usar el nuevo endpoint /twins/{twinId}/photos/by-path/{path}
+            const response = await fetch(`${API_BASE_URL}/api/twins/${twinId}/photos/by-path/${encodeURIComponent(path)}`, {
                 method: 'GET',
                 headers: {
                     'X-API-Key': API_KEY,
@@ -2331,14 +2331,73 @@ class TwinApiService {
 
             const responseData = await response.json();
             console.log('✅ Photos list successful:', responseData);
+            console.log('🔍 Response structure:', {
+                success: responseData.success,
+                totalCount: responseData.totalCount,
+                path: responseData.path,
+                twinId: responseData.twinId,
+                message: responseData.message,
+                analisisResidencialCount: responseData.analisisResidencial?.length || 0,
+                rawAnalisisResidencial: responseData.analisisResidencial
+            });
+            console.log('🔍 Full response keys:', Object.keys(responseData));
             
-            // Mapear la respuesta real al formato esperado por el frontend
+            // Mapear la respuesta del nuevo endpoint usando los campos correctos
+            const photos = (responseData.analisisResidencial || []).map((analisis: any, index: number) => {
+                console.log(`📸 Photo ${index + 1}:`, {
+                    id: analisis.id,
+                    fileName: analisis.fileName,
+                    filePath: analisis.filePath,
+                    fileURL: analisis.fileURL,
+                    descripcionGenerica: analisis.descripcionGenerica,
+                    tipoEspacio: analisis.tipoEspacio, // Debug camelCase
+                    TipoEspacio: analisis.TipoEspacio, // Debug PascalCase
+                    allKeys: Object.keys(analisis), // Ver todas las claves disponibles
+                    detailsHTML: analisis.detailsHtml ? 'Has HTML content' : 'No HTML',
+                    detailsHTMLContent: analisis.detailsHtml,  // Log completo del HTML
+                    fullAnalisisObject: analisis  // Ver estructura completa
+                });
+                
+                return {
+                    fileName: analisis.fileName || '',
+                    filePath: analisis.filePath || '',
+                    photoUrl: analisis.fileURL || '',
+                    fileSize: 0, // No viene en AnalisisResidencialSummary
+                    lastModified: '', // No viene en AnalisisResidencialSummary
+                    contentType: 'image/jpeg', // Asumir imagen por defecto
+                    directory: path,
+                    createdOn: '', // No viene en AnalisisResidencialSummary
+                    eTag: analisis.id || '',
+                    metadata: {
+                        id: analisis.id,
+                        twinID: analisis.twinID,
+                        tipoEspacio: analisis.tipoEspacio || analisis.TipoEspacio, // Intentar ambas versiones
+                        descripcionGenerica: analisis.descripcionGenerica,
+                        detailsHTML: analisis.detailsHtml, // Corregir: detailsHtml en lugar de detailsHTML
+                        originalData: analisis
+                    }
+                };
+            });
+            
+            console.log(`📊 Mapped ${photos.length} photos for display`);
+            
+            // Mapear la respuesta al formato esperado por el frontend
             const mappedResponse = {
-                ...responseData,
-                // Mapear photos a files para compatibilidad con el código existente
-                files: responseData.photos || [],
-                totalFiles: responseData.totalCount || responseData.totalFilesInPath || 0,
-                directory: responseData.path || ''
+                success: responseData.success || true,
+                message: responseData.message || `Se encontraron ${photos.length} fotos`,
+                photos: photos,
+                totalCount: responseData.totalCount || photos.length,
+                totalFilesInPath: responseData.totalCount || photos.length,
+                path: responseData.path || path,
+                containerName: '',
+                recursive: false,
+                // Campos legacy para compatibilidad
+                files: photos,
+                totalFiles: photos.length,
+                directory: responseData.path || path,
+                // Datos adicionales del backend
+                twinId: responseData.twinId,
+                rawAnalisisData: responseData.analisisResidencial
             };
             
             return {

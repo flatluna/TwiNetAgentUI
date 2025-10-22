@@ -69,6 +69,19 @@ const DocumentoDetallePage: React.FC = () => {
             console.log('💰 totalAmount:', doc.totalAmount);
             console.log('💰 currency:', doc.currency);
             console.log('💰 taxAmount:', doc.taxAmount);
+            console.log('📄 documentUrl:', doc.documentUrl);
+            console.log('📋 fullInvoiceData:', doc.fullInvoiceData);
+            console.log('🔗 fileURL en fullInvoiceData:', doc.fullInvoiceData?.fileURL || doc.fullInvoiceData?.fileUrl);
+            
+            // Si no hay documentUrl, usar fileURL de fullInvoiceData
+            if (!doc.documentUrl && doc.fullInvoiceData) {
+                const fileUrl = doc.fullInvoiceData.fileURL || doc.fullInvoiceData.fileUrl;
+                if (fileUrl) {
+                    console.log('🔄 Usando fileURL como documentUrl:', fileUrl);
+                    doc.documentUrl = fileUrl;
+                }
+            }
+            
             setDocumento(doc);
             setLoading(false);
         } else if (documentoId) {

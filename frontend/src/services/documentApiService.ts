@@ -2,6 +2,137 @@ interface DocumentListResponseWithStatus extends DocumentListResponse {
     success: boolean;
 }
 
+// Interfaces para el endpoint de metadata de facturas
+interface InvoiceMetadata {
+    id: string;
+    twinID: string;
+    fileName: string;
+    filePath: string;
+    invoiceTotal?: number;
+    currency?: string;
+    invoiceDate?: string;
+    dueDate?: string;
+    vendorName?: string;
+    customerName?: string;
+    lineItemsCount?: number;
+    totalTax?: number;
+    subTotal?: number;
+    processedAt: string;
+    source?: string;
+    success?: boolean;
+    invoiceNumber?: string;
+    totalPages?: number;
+    tablesCount?: number;
+    rawFieldsCount?: number;
+    vendorNameConfidence?: number;
+    customerNameConfidence?: number;
+    invoiceTotalConfidence?: number;
+    subTotalConfidence?: number;
+    createdAt?: string;
+    errorMessage?: string;
+}
+
+interface InvoicesMetadataResponse {
+    success: boolean;
+    twinId: string;
+    totalInvoices: number;
+    invoices: InvoiceMetadata[];
+    summary: {
+        totalAmount: number;
+        averageAmount: number;
+        totalTax: number;
+        totalLineItems: number;
+        dateRange: string;
+        topVendors: any[];
+    };
+    processingTimeSeconds: number;
+    retrievedAt: string;
+    message: string;
+    note: string;
+}
+
+// Interface para la respuesta del endpoint GetInvoiceById
+interface GetInvoiceByIdResponse {
+    Success: boolean;
+    TwinId: string;
+    DocumentId: string;
+    Invoice: {
+        id?: string;
+        fileName: string;
+        filePath: string;
+        vendorName: string;
+        vendorAddress?: string;
+        invoiceDate: string;
+        dueDate?: string;
+        invoiceNumber: string;
+        invoiceTotal: number;
+        totalAmount?: number;
+        currency: string;
+        totalTax: number;
+        taxAmount?: number;
+        subTotal: number;
+        lineItems?: any[];
+        extractedText?: string;
+        htmlContent?: string;
+        aiSummary?: string;
+        documentUrl?: string;
+        fileUrl?: string;
+        // Otros campos que pueda contener la respuesta completa
+        [key: string]: any;
+    };
+    ProcessingTimeSeconds: number;
+    RetrievedAt: string;
+    Message: string;
+    Note: string;
+}
+
+interface CSVRecord {
+    data: { [key: string]: string };
+    Data?: { [key: string]: string }; // Backup para compatibilidad
+}
+
+interface CSVFileMetadata {
+    Id: string;
+    TwinId: string;
+    FileName: string;
+    ContainerName: string;
+    FilePath: string;
+    TotalRows: number;
+    TotalColumns: number;
+    ColumnNames: string[];
+    ProcessedAt: string;
+    Success: boolean;
+    ErrorMessage?: string;
+    DocumentType: string;
+    CreatedAt: string;
+}
+
+interface CSVFileData extends CSVFileMetadata {
+    Records: CSVRecord[];
+    // Campos adicionales para compatibilidad camelCase
+    id?: string;
+    twinId?: string;
+    fileName?: string;
+    containerName?: string;
+    filePath?: string;
+    totalRows?: number;
+    totalColumns?: number;
+    columnNames?: string[];
+    records?: CSVRecord[];
+    processedAt?: string;
+    success?: boolean;
+    errorMessage?: string;
+}
+
+interface CSVFilesResponse {
+    Success: boolean;
+    TwinId: string;
+    TotalFiles: number;
+    Files: CSVFileData[];
+    RetrievedAt: string;
+    Message: string;
+}
+
 interface DocumentUploadResponse {
     success?: boolean; // Campo para indicar éxito del operación
     message?: string;
@@ -16,6 +147,11 @@ interface DocumentUploadResponse {
     file_size?: number; // Para el nuevo endpoint upload-document
     twin_id?: string; // Para el nuevo endpoint upload-document
     upload_result?: string; // Para el nuevo endpoint upload-document
+    processing_time?: number; // Tiempo de procesamiento en segundos
+    metadata?: any; // Metadatos del archivo
+    estructura?: string; // Estructura del documento
+    total_paginas?: number; // Total de páginas
+    tiene_indice?: string; // Si tiene índice ("Sí" o "No")
 }
 
 interface DocumentInfo {
@@ -89,6 +225,18 @@ interface DocumentInfo {
     };
     // Campo para toda la data del documento (usado para filtrado local)
     allDocumentData?: any;
+    // Metadatos específicos para documentos no estructurados (nuevos DTOs)
+    noStructuredMetadata?: {
+        documentID: string;
+        twinID: string;
+        estructura: string;
+        subcategoria: string;
+        totalChapters: number;
+        totalTokens: number;
+        totalPages: number;
+        processedAt: string;
+        searchScore: number;
+    };
 }
 
 interface DocumentListResponse {
@@ -112,7 +260,13 @@ class DocumentAPIService {
     private baseURL: string;
 
     constructor() {
-        this.baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:7011';
+        // En desarrollo, usar proxy de Vite (rutas relativas /api)
+        // En producción, usar la URL completa
+        this.baseURL = import.meta.env.DEV 
+            ? '' // Usar rutas relativas para que Vite proxy las redirija
+            : (import.meta.env.VITE_BACKEND_URL || 'http://localhost:7011');
+            
+        console.log('🔗 Conectando directamente a Azure Functions:', this.baseURL || '/api');
     }
 
     /**
@@ -288,6 +442,245 @@ class DocumentAPIService {
     }
 
     /**
+     * Get CSV files metadata for fast listing (no CSV records)
+     * Uses GET /api/get-csv-files-metadata/{twinId}
+     */
+    async getCSVFilesMetadata(twinId: string): Promise<CSVFileMetadata[]> {
+        try {
+            console.log(`📊 Obteniendo metadata de archivos CSV para twin: ${twinId}`);
+            
+            const headers = this.getAuthHeaders();
+            const response = await fetch(`${this.baseURL}/api/get-csv-files-metadata/${encodeURIComponent(twinId)}`, {
+                method: 'GET',
+                headers
+            });
+
+            console.log(`📊 CSV Metadata response status: ${response.status}`);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ CSV Metadata error:', errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ Metadata de archivos CSV obtenida:', result);
+            
+            if (result?.success && result?.files) {
+                // Mapear los datos de camelCase a PascalCase para consistencia
+                return result.files.map((file: any) => ({
+                    Id: file.id,
+                    TwinId: file.twinId,
+                    FileName: file.fileName,
+                    ContainerName: file.containerName,
+                    FilePath: file.filePath,
+                    TotalRows: file.totalRows,
+                    TotalColumns: file.totalColumns,
+                    ColumnNames: file.columnNames,
+                    ProcessedAt: file.processedAt,
+                    Success: file.success,
+                    ErrorMessage: file.errorMessage,
+                    DocumentType: file.documentType,
+                    CreatedAt: file.createdAt
+                })) as CSVFileMetadata[];
+            }
+            
+            return [];
+        } catch (error) {
+            console.error('❌ Error getting CSV metadata:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get specific CSV file with full data including records
+     * Uses GET /api/get-csv-files/{twinId} and filters by ID
+     */
+    async getCSVFileById(twinId: string, csvId: string): Promise<CSVFileData | null> {
+        try {
+            console.log(`📊 Obteniendo archivo CSV específico: ${csvId} para twin: ${twinId}`);
+            
+            const headers = this.getAuthHeaders();
+            const response = await fetch(`${this.baseURL}/api/get-csv-file/${encodeURIComponent(twinId)}/${encodeURIComponent(csvId)}`, {
+                method: 'GET',
+                headers
+            });
+
+            console.log(`📊 CSV File by ID response status: ${response.status}`);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ CSV File by ID error:', errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ Archivo CSV específico obtenido:', result);
+            
+            if (result?.success && result?.file) {
+                const file = result.file;
+                return {
+                    Id: file.id,
+                    TwinId: file.twinId,
+                    FileName: file.fileName,
+                    ContainerName: file.containerName,
+                    FilePath: file.filePath,
+                    TotalRows: file.totalRows,
+                    TotalColumns: file.totalColumns,
+                    ColumnNames: file.columnNames || [],
+                    ProcessedAt: file.processedAt,
+                    Success: file.success,
+                    ErrorMessage: file.errorMessage,
+                    DocumentType: file.documentType || 'CSV',
+                    CreatedAt: file.createdAt || file.processedAt, // Usar processedAt como fallback
+                    Records: (file.records || []).map((record: any) => ({
+                        data: record.data || {},
+                        Data: record.data // Mantener compatibilidad con el formato original
+                    }))
+                };
+            }
+            
+            console.log(`❌ No se encontró el archivo CSV con ID: ${csvId}`);
+            return null;
+        } catch (error) {
+            console.error('❌ Error getting CSV file by ID:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Analyze CSV file using Azure AI Agent
+     * Uses POST /api/analyze-csv-file/{twinId}/{fileName} or optimized version with FileID
+     */
+    async analyzeCSVFile(twinId: string, fileName: string, question: string, fileId?: string): Promise<any> {
+        try {
+            console.log(`🤖 Analizando archivo CSV: ${fileName} para twin: ${twinId}`);
+            console.log(`❓ Pregunta: ${question}`);
+            
+            const headers = this.getAuthHeaders();
+            
+            // El FileID ahora va en la URL
+            const fileIdParam = fileId || "empty";
+            
+            // Log para debugging
+            if (fileId) {
+                console.log(`🚀 Usando FileID para optimización: ${fileId}`);
+            } else {
+                console.log(`� Primera consulta - FileID vacío, se cargará el archivo completo`);
+            }
+            
+            const response = await fetch(`${this.baseURL}/api/analyze-csv-file/${encodeURIComponent(twinId)}/${encodeURIComponent(fileName)}/${encodeURIComponent(fileIdParam)}`, {
+                method: 'POST',
+                headers: {
+                    ...headers,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    Question: question
+                })
+            });
+
+            console.log(`🤖 CSV Analysis response status: ${response.status}`);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ CSV Analysis error:', errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ Análisis CSV completado:', result);
+            
+            return result;
+        } catch (error) {
+            console.error('❌ Error analyzing CSV file:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get CSV files processed for a specific twin using the specific CSV endpoint
+     * Uses GET /api/get-csv-files/{twinId}
+     * @deprecated Use getCSVFilesMetadata for listing and getCSVFileById for details
+     */
+    async getCSVFiles(twinId: string): Promise<CSVFilesResponse> {
+        try {
+            console.log(`📊 Obteniendo archivos CSV procesados para twin: ${twinId}`);
+            
+            const headers = this.getAuthHeaders();
+            const response = await fetch(`${this.baseURL}/api/get-csv-files/${encodeURIComponent(twinId)}`, {
+                method: 'GET',
+                headers
+            });
+
+            console.log(`📊 CSV Files response status: ${response.status}`);
+            console.log(`📊 CSV Files response ok: ${response.ok}`);
+
+            if (!response.ok) {
+                let errorData: any;
+                try {
+                    const contentType = response.headers.get('content-type');
+                    console.log(`📊 CSV Files Error response content-type: ${contentType}`);
+                    
+                    if (contentType && contentType.includes('application/json')) {
+                        errorData = await response.json();
+                    } else {
+                        const errorText = await response.text();
+                        errorData = { error: errorText };
+                    }
+                } catch (parseError) {
+                    console.error('❌ Error parsing CSV files error response:', parseError);
+                    errorData = { error: `HTTP ${response.status}: Error parsing response` };
+                }
+                
+                console.error('❌ CSV Files error data:', errorData);
+                const errorMessage = errorData?.error || errorData?.message || `HTTP ${response.status}: ${response.statusText}`;
+                throw new Error(errorMessage);
+            }
+
+            // Procesar respuesta exitosa
+            let result: any;
+            try {
+                const contentType = response.headers.get('content-type');
+                console.log(`📊 CSV Files Success response content-type: ${contentType}`);
+                
+                if (contentType && contentType.includes('application/json')) {
+                    result = await response.json();
+                    console.log('✅ CSV Files JSON response parsed successfully:', result);
+                } else {
+                    const textResult = await response.text();
+                    console.log('✅ CSV Files Text response received:', textResult);
+                    // Intentar parsear como JSON
+                    try {
+                        result = JSON.parse(textResult);
+                        console.log('✅ CSV Files Text successfully parsed as JSON:', result);
+                    } catch {
+                        result = {
+                            Success: false,
+                            message: textResult || 'Error obteniendo archivos CSV',
+                            Files: []
+                        };
+                    }
+                }
+            } catch (parseError) {
+                console.error('❌ Error parsing CSV files success response:', parseError);
+                result = {
+                    Success: false,
+                    message: 'Error procesando respuesta de archivos CSV',
+                    Files: []
+                };
+            }
+
+            console.log('✅ Archivos CSV obtenidos exitosamente');
+            console.log('📋 CSV Files Final processed result:', result);
+            return result;
+        } catch (error) {
+            console.error('❌ Error getting CSV files:', error);
+            throw error;
+        }
+    }
+
+    /**
      * List documents by specific directory path
      * New format: GET /api/list-documents/{twinId}/{encodedDirectoryPath}
      * Example: GET /api/list-documents/TWN001/documents%252Finvoices → documents/Facturas
@@ -445,6 +838,102 @@ class DocumentAPIService {
         estructuraFiltro: string = 'no-estructurado'
     ): Promise<DocumentUploadResponse> {
         return this.uploadDocument(twinId, file, subCategory, estructuraFiltro);
+    }
+
+    /**
+     * Upload no-structured document with additional metadata
+     */
+    async uploadNoStructuredDocument(
+        twinId: string,
+        file: File,
+        subCategory: string,
+        estructura: string = 'no-estructurado',
+        totalPaginas: number,
+        tieneIndice: boolean,
+        paginaInicioIndice: number = 1,
+        paginaFinIndice: number = 1,
+        requiereTraduccion: boolean = false,
+        idiomaDestino: string = 'es',
+        modelo: string = 'gpt-5-mini'
+    ): Promise<DocumentUploadResponse> {
+        try {
+            console.log(`📤 Subiendo documento no estructurado para twin: ${twinId}`);
+            console.log(`📋 Subcategoría: ${subCategory}, Páginas: ${totalPaginas}, Tiene índice: ${tieneIndice}`);
+
+            // Convertir archivo a base64
+            const base64Content = await this.fileToBase64(file);
+            
+            // Prepare JSON payload
+            const requestData = {
+                FileName: file.name,
+                FileContent: base64Content,
+                ContainerName: `twin-${twinId}`,
+                FilePath: `${estructura}/${subCategory}`,
+                Estructura: estructura,
+                Subcategoria: subCategory,
+                TotalPaginas: totalPaginas,
+                TieneIndice: tieneIndice,
+                StartIndex: tieneIndice ? paginaInicioIndice : 0,
+                EndIndex: tieneIndice ? paginaFinIndice : 0,
+                RequiereTraduccion: requiereTraduccion,
+                IdiomaDestino: idiomaDestino,
+                Model: modelo
+            };
+
+            console.log(`🌐 Llamando al endpoint: ${this.baseURL}/api/upload-no-structured-document/${twinId}`);
+            console.log(`📋 Datos enviados:`, {
+                FileName: requestData.FileName,
+                ContainerName: requestData.ContainerName,
+                FilePath: requestData.FilePath,
+                Estructura: requestData.Estructura,
+                Subcategoria: requestData.Subcategoria,
+                TotalPaginas: requestData.TotalPaginas,
+                TieneIndice: requestData.TieneIndice,
+                StartIndex: requestData.StartIndex,
+                EndIndex: requestData.EndIndex,
+                RequiereTraduccion: requestData.RequiereTraduccion,
+                IdiomaDestino: requestData.IdiomaDestino,
+                Model: requestData.Model,
+                FileContentLength: base64Content.length
+            });
+
+            const response = await fetch(`${this.baseURL}/api/upload-no-structured-document/${twinId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...this.getAuthHeaders()
+                },
+                body: JSON.stringify(requestData)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`❌ Error HTTP ${response.status}:`, errorText);
+                throw new Error(`Error HTTP ${response.status}: ${errorText}`);
+            }
+
+            const responseData = await response.json();
+            console.log(`✅ Respuesta exitosa del backend:`, responseData);
+
+            return {
+                success: responseData.Success || true,
+                message: responseData.Message || 'Documento subido exitosamente',
+                file_url: responseData.Url,
+                file_path: responseData.FilePath,
+                name: responseData.FileName || file.name,
+                size: responseData.FileSize || file.size,
+                document_type: responseData.Subcategoria || subCategory,
+                processing_time: responseData.ProcessingTimeSeconds,
+                metadata: responseData.Metadata,
+                estructura: responseData.Estructura,
+                total_paginas: responseData.TotalPaginas,
+                tiene_indice: responseData.TieneIndice
+            };
+
+        } catch (error) {
+            console.error('❌ Error al subir documento no estructurado:', error);
+            throw error;
+        }
     }
 
     /**
@@ -984,6 +1473,112 @@ class DocumentAPIService {
             return result;
         } catch (error) {
             console.error('❌ Error uploading document:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Upload CSV document using specific CSV endpoint with base64 format
+     * Uses POST /api/upload-document-csv/{twinId} with JSON body
+     */
+    async uploadCSVDocument(
+        twinId: string, 
+        file: File
+    ): Promise<DocumentUploadResponse> {
+        try {
+            console.log(`📊 Subiendo CSV con formato base64 para twin: ${twinId}`);
+            console.log(`� Archivo: ${file.name}, Tamaño: ${(file.size / 1024).toFixed(2)} KB`);
+
+            // Convert file to base64 like other methods
+            const fileContent = await this.fileToBase64(file);
+            console.log(`🔄 CSV convertido a base64, tamaño: ${fileContent.length} caracteres`);
+
+            // Create JSON body with base64 content (same pattern as other methods)
+            const requestBody = {
+                fileName: file.name,
+                fileContent: fileContent,
+                filePath: 'estructurado/CSV',
+                documentType: 'CSV'
+            };
+
+            console.log('📋 Request body structure for CSV:', {
+                fileName: requestBody.fileName,
+                fileContentLength: requestBody.fileContent.length,
+                filePath: requestBody.filePath,
+                documentType: requestBody.documentType
+            });
+
+            const headers = this.getAuthHeaders();
+
+            const response = await fetch(`${this.baseURL}/api/upload-document-csv/${encodeURIComponent(twinId)}`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(requestBody)
+            });
+
+            console.log(`📊 CSV Upload response status: ${response.status}`);
+            console.log(`📊 CSV Upload response ok: ${response.ok}`);
+
+            if (!response.ok) {
+                let errorData: any;
+                try {
+                    const contentType = response.headers.get('content-type');
+                    console.log(`📊 CSV Error response content-type: ${contentType}`);
+                    
+                    if (contentType && contentType.includes('application/json')) {
+                        errorData = await response.json();
+                    } else {
+                        const errorText = await response.text();
+                        errorData = { error: errorText };
+                    }
+                } catch (parseError) {
+                    console.error('❌ Error parsing CSV upload error response:', parseError);
+                    errorData = { error: `HTTP ${response.status}: Error parsing response` };
+                }
+                
+                console.error('❌ CSV Upload error data:', errorData);
+                const errorMessage = errorData?.error || errorData?.message || `HTTP ${response.status}: ${response.statusText}`;
+                throw new Error(errorMessage);
+            }
+
+            // Procesar respuesta exitosa (same pattern as other methods)
+            let result: any;
+            try {
+                const contentType = response.headers.get('content-type');
+                console.log(`📊 CSV Success response content-type: ${contentType}`);
+                
+                if (contentType && contentType.includes('application/json')) {
+                    result = await response.json();
+                    console.log('✅ CSV JSON response parsed successfully:', result);
+                } else {
+                    const textResult = await response.text();
+                    console.log('✅ CSV Text response received:', textResult);
+                    // Intentar parsear como JSON
+                    try {
+                        result = JSON.parse(textResult);
+                        console.log('✅ CSV Text successfully parsed as JSON:', result);
+                    } catch {
+                        result = {
+                            success: true,
+                            message: textResult || 'CSV subido exitosamente',
+                            fileName: file.name
+                        };
+                    }
+                }
+            } catch (parseError) {
+                console.error('❌ Error parsing CSV success response:', parseError);
+                result = {
+                    success: true,
+                    message: 'CSV subido exitosamente',
+                    fileName: file.name
+                };
+            }
+
+            console.log('✅ CSV subido exitosamente con formato base64');
+            console.log('📋 CSV Final processed result:', result);
+            return result;
+        } catch (error) {
+            console.error('❌ Error uploading CSV document:', error);
             throw error;
         }
     }
@@ -1681,6 +2276,494 @@ class DocumentAPIService {
             };
         }
     }
+
+    /**
+     * Search no-structured documents by structure and twin ID
+     */
+    async searchNoStructuredDocuments(twinId: string, estructura: string): Promise<NoStructuredSearchResult> {
+        try {
+            console.log(`🔍 Buscando documentos no estructurados - Twin ID: ${twinId}, Estructura: ${estructura}`);
+            
+            const url = `${this.baseURL}/api/search-no-structured-documents/${twinId}/${encodeURIComponent(estructura)}`;
+            console.log(`🌐 URL completa: ${url}`);
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: this.getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log(`✅ Respuesta de SearchNoStructuredDocuments:`, data);
+
+            return data;
+        } catch (error) {
+            console.error('❌ Error en searchNoStructuredDocuments:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Search no-structured documents metadata only (lightweight)
+     */
+    async searchNoStructuredDocumentsMetadata(twinId: string, estructura: string): Promise<NoStructuredSearchMetadataResult> {
+        try {
+            console.log(`🔍 Buscando metadatos de documentos no estructurados - Twin ID: ${twinId}, Estructura: ${estructura}`);
+            
+            const url = `${this.baseURL}/api/search-no-structured-documents-metadata/${twinId}/${encodeURIComponent(estructura)}`;
+            console.log(`🌐 URL completa: ${url}`);
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: this.getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log(`✅ Respuesta de SearchNoStructuredDocumentsMetadata:`, data);
+
+            return data;
+        } catch (error) {
+            console.error('❌ Error en searchNoStructuredDocumentsMetadata:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Answer a search question using AI Agent for a specific document
+     */
+    async answerSearchQuestion(
+        twinId: string, 
+        fileName: string, 
+        question: string,
+        model: string = 'gpt-5-mini',
+        language: string = 'Spanish'
+    ): Promise<TwinAgentDocumentResponse> {
+        try {
+            console.log(`🤖 Enviando pregunta al AI Agent - Twin ID: ${twinId}, Archivo: ${fileName}`);
+            console.log(`❓ Pregunta: ${question}`);
+            console.log(`🤖 Modelo: ${model}`);
+            console.log(`🌐 Idioma: ${language}`);
+            
+            const url = `${this.baseURL}/api/answer-search-question/${twinId}/${encodeURIComponent(fileName)}`;
+            console.log(`🌐 URL completa: ${url}`);
+            
+            const requestBody: TwinAgentDocumentRequest = {
+                question: question,
+                ModeloNombre: model,
+                Idioma: language
+            };
+            
+            console.log(`📤 Cuerpo de la solicitud:`, requestBody);
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    ...this.getAuthHeaders(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            console.log(`📡 Response status: ${response.status} ${response.statusText}`);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`❌ Error HTTP: ${response.status} - ${response.statusText}`, errorText);
+                throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+            }
+
+            const data: TwinAgentDocumentResponse = await response.json();
+            console.log(`✅ Respuesta del AI Agent:`, data);
+            console.log(`🎯 Respuesta procesada - Pregunta: "${data.question}"`);
+            console.log(`💬 Respuesta: "${data.answer}"`);
+            console.log(`⏱️ Tiempo de procesamiento: ${data.processingTimeMs}ms`);
+            console.log(`📅 Procesado en: ${data.processedAt}`);
+
+            return data;
+        } catch (error) {
+            console.error('❌ Error en answerSearchQuestion:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get a specific no-structured document by documentId and twinId
+     */
+    async getNoStructuredDocument(twinId: string, documentId: string): Promise<GetNoStructuredDocumentResponse> {
+        try {
+            console.log(`📄 Obteniendo documento no estructurado - Twin ID: ${twinId}, Document ID: ${documentId}`);
+            
+            const url = `${this.baseURL}/api/get-no-structured-document/${twinId}/${encodeURIComponent(documentId)}`;
+            console.log(`🌐 URL completa: ${url}`);
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: this.getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+            }
+
+            const data: GetNoStructuredDocumentResponse = await response.json();
+            console.log(`✅ Respuesta de GetNoStructuredDocument:`, data);
+
+            return data;
+        } catch (error) {
+            console.error('❌ Error en getNoStructuredDocument:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Delete a specific no-structured document by documentId and twinId
+     */
+    async deleteNoStructuredDocument(twinId: string, documentId: string): Promise<DeleteNoStructuredDocumentResponse> {
+        try {
+            console.log(`🗑️ Eliminando documento no estructurado - Twin ID: ${twinId}, Document ID: ${documentId}`);
+            
+            const url = `${this.baseURL}/api/delete-no-structured-document/${twinId}/${encodeURIComponent(documentId)}`;
+            console.log(`🌐 URL completa: ${url}`);
+            
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: this.getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+            }
+
+            const data: DeleteNoStructuredDocumentResponse = await response.json();
+            console.log(`✅ Respuesta de DeleteNoStructuredDocument:`, data);
+
+            return data;
+        } catch (error) {
+            console.error('❌ Error en deleteNoStructuredDocument:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get invoices metadata for a specific twin using the optimized endpoint
+     * @param twinId - The twin ID
+     * @returns Promise with invoices metadata response
+     */
+    async getInvoicesMetadata(twinId: string): Promise<InvoicesMetadataResponse> {
+        try {
+            console.log(`📊 Obteniendo metadata de facturas - Twin ID: ${twinId}`);
+            
+            const url = `${this.baseURL}/api/invoices-metadata/${twinId}`;
+            console.log(`🌐 URL completa: ${url}`);
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: this.getAuthHeaders()
+            });
+
+            console.log(`📡 Response status: ${response.status} ${response.statusText}`);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`❌ Error HTTP: ${response.status} - ${response.statusText}`, errorText);
+                throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+            }
+
+            const data: InvoicesMetadataResponse = await response.json();
+            console.log(`✅ Metadata de facturas obtenida:`, data);
+            console.log(`📊 Total de facturas: ${data.totalInvoices}`);
+            console.log(`💰 Resumen: Total Amount: ${data.summary.totalAmount}, Average: ${data.summary.averageAmount}`);
+
+            return data;
+        } catch (error) {
+            console.error('❌ Error en getInvoicesMetadata:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get a specific invoice by ID using the optimized endpoint
+     * @param twinId - The twin ID
+     * @param documentId - The document/invoice ID
+     * @returns Promise with specific invoice details
+     */
+    async getInvoiceById(twinId: string, documentId: string): Promise<any> {
+        try {
+            console.log(`📄 Obteniendo factura específica - Twin ID: ${twinId}, Document ID: ${documentId}`);
+            
+            const url = `${this.baseURL}/api/invoice/${twinId}/${documentId}`;
+            console.log(`🌐 URL completa: ${url}`);
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: this.getAuthHeaders()
+            });
+
+            console.log(`📡 Response status: ${response.status} ${response.statusText}`);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`❌ Error HTTP: ${response.status} - ${response.statusText}`, errorText);
+                throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+            }
+
+            const data: any = await response.json();
+            console.log(`✅ Factura específica obtenida:`, data);
+            console.log(`� Estructura completa de la respuesta:`, JSON.stringify(data, null, 2));
+            console.log(`�📋 Nombre archivo: ${data.Invoice?.fileName}`);
+            console.log(`💰 Total: ${data.Invoice?.invoiceTotal || data.Invoice?.totalAmount}`);
+            console.log(`🏢 Vendor: ${data.Invoice?.vendorName}`);
+            console.log(`🔑 Propiedades del objeto Invoice:`, Object.keys(data.Invoice || {}));
+            console.log(`🔑 Propiedades del objeto raíz:`, Object.keys(data || {}));
+
+            return data;
+        } catch (error) {
+            console.error('❌ Error en getInvoiceById:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * AI Analysis for invoices by vendor
+     * @param twinId - The twin ID
+     * @param vendorName - The vendor name
+     * @param question - The question to ask
+     * @param fileId - Optional file ID (default "null")
+     * @returns Promise with AI analysis response
+     */
+    async aiInvoicesAnalysis(twinId: string, vendorName: string, question: string, fileId: string = "null"): Promise<AiInvoicesAnalysisResponse> {
+        try {
+            console.log(`🤖 Iniciando análisis AI de facturas - Twin ID: ${twinId}, Vendor: ${vendorName}`);
+            console.log(`❓ Pregunta: ${question}`);
+            
+            const url = `${this.baseURL}/api/ai-invoices-analysis/${twinId}/${encodeURIComponent(vendorName)}`;
+            console.log(`🌐 URL completa: ${url}`);
+            
+            const requestBody: AnalysisRequest = {
+                Question: question,
+                FileID: fileId
+            };
+
+            console.log(`📤 Request body:`, requestBody);
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    ...this.getAuthHeaders(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            console.log(`📡 Response status: ${response.status} ${response.statusText}`);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`❌ Error HTTP: ${response.status} - ${response.statusText}`, errorText);
+                throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+            }
+
+            const data: AiInvoicesAnalysisResponse = await response.json();
+            console.log(`✅ Análisis AI completado:`, data);
+            
+            return data;
+        } catch (error) {
+            console.error('❌ Error en aiInvoicesAnalysis:', error);
+            throw error;
+        }
+    }
+}
+
+// Interfaces for the new search functionality
+export interface NoStructuredSearchResult {
+    success: boolean;
+    error?: string;
+    documents: NoStructuredDocument[];
+    totalChapters: number;
+    totalDocuments: number;
+    searchQuery: string;
+    searchType: string;
+    message?: string;
+}
+
+export interface NoStructuredSearchMetadataResult {
+    success: boolean;
+    error?: string;
+    documents: NoStructuredDocumentMetadata[];
+    totalChapters: number;
+    totalDocuments: number;
+    searchQuery: string;
+    searchType: string;
+    message?: string;
+}
+
+export interface NoStructuredDocumentMetadata {
+    documentID: string;
+    twinID: string;
+    estructura: string;
+    subcategoria: string;
+    totalChapters: number;
+    totalTokens: number;
+    totalPages: number;
+    processedAt: string;
+    searchScore: number;
+    documentTitle: string;
+}
+
+export interface NoStructuredDocument {
+    documentID: string;
+    twinID: string;
+    estructura?: string;
+    subcategoria?: string;
+    totalChapters: number;
+    totalPages?: number;
+    totalTokens: number;
+    processedAt: string;
+    searchScore?: number;
+    capitulos: NoStructuredSearchResultItem[];
+    documentTitle?: string;
+}
+
+export interface NoStructuredSearchResultItem {
+    id: string;
+    documentID: string;
+    capituloID: string;
+    subTemaID: string;
+    twinID: string;
+    estructura?: string;
+    total_Subtemas_Capitulo: number;
+    textoCompleto: string;
+    capituloPaginaDe: number;
+    capituloPaginaA: number;
+    capituloTotalTokens: number;
+    capituloTimeSeconds: number;
+    total_Palabras_Subtema: number;
+    titleSubCapitulo: string;  // Cambió de 'nombre' a 'titleSubCapitulo'
+    textoSubCapitulo: string;  // Cambió de 'texto' a 'textoSubCapitulo'
+    descripcion: string;
+    html: string;
+    totalTokensCapitulo: number;
+    dateCreated: string;
+    // Campos adicionales que pueden existir pero no usamos
+    titulo?: string;
+    numeroCapitulo?: string;
+    paginaDe?: number;
+    paginaA?: number;
+    nivel?: number;
+    totalTokens?: number;
+    textoCompletoHTML?: string;
+    resumenEjecutivo?: string;
+    preguntasFrecuentes?: string;
+    processedAt?: string;
+    searchScore: number;
+    highlights: string[];
+}
+
+// Interface para ExractedChapterSubsIndex (como especifica el backend)
+export interface ExtractedChapterSubsIndex {
+    chapter: string;
+    id: string;
+    twinID: string;
+    subcategoria: string;
+    totalTokensDocument: number;
+    fileName: string;
+    filePath: string;
+    chapterID: string;
+    textChapter: string;
+    fromPageChapter: number;
+    toPageChapter: number;
+    totalTokens: number;
+    titleSub: string;
+    textSub: string;
+    totalTokensSub: number;
+    fromPageSub: number;
+    toPageSub: number;
+    fileURL: string;
+}
+
+// Interface para la respuesta del endpoint GetNoStructuredDocument
+export interface GetNoStructuredDocumentResponse {
+    success: boolean;
+    twinId: string;
+    fileName: string;
+    filePath: string;
+    subcategoria: string;
+    totalChapters: number;
+    documentData: ExtractedChapterSubsIndex[];
+    totalTokens: number;
+    totalPages: number;
+    chapters: ExtractedChapterSubsIndex[];
+    message: string;
+}
+
+// Interface para el request del AI Agent (TwinAgentDocumentRequest)
+export interface TwinAgentDocumentRequest {
+    question: string;
+    ModeloNombre?: string;
+    Idioma?: string;
+}
+
+// Interface para la respuesta del AI Agent (TwinAgentDocumentResponse)
+export interface TwinAgentDocumentResponse {
+    success: boolean;
+    question: string;
+    answer: string;
+    twinId: string;
+    fileName: string;
+    processingTimeMs: number;
+    processedAt: string;
+    errorMessage?: string;
+}
+
+// Interface para la respuesta del endpoint DeleteNoStructuredDocument
+export interface DeleteNoStructuredDocumentResponse {
+    success: boolean;
+    documentId: string;
+    deletedChaptersCount: number;
+    totalChaptersFound: number;
+    message: string;
+    errors?: string[];
+}
+
+// Interface para el request del AI Invoices Analysis
+export interface AnalysisRequest {
+    Question: string;
+    FileID?: string;
+}
+
+// Interface para la respuesta del AI Invoices Analysis
+export interface AiInvoicesAnalysisResponse {
+    success: boolean;
+    twinId: string;
+    vendorName: string;
+    question: string;
+    fileID: string;
+    analysisResult: {
+        aiResponse?: string;
+        htmlContent?: string;
+        fileID?: string;
+        question?: string;
+        [key: string]: any;
+    };
+    processingTimeSeconds: number;
+    processedAt: string;
+    message: string;
+    features?: {
+        azureAIAgent: string;
+        languages: string;
+        capabilities: string;
+        scope: string;
+        fileOptimization: string;
+    };
+    note?: string;
+    errorMessage?: string;
 }
 
 // Export singleton instance
@@ -1690,5 +2773,8 @@ export type {
     DocumentListResponse, 
     DocumentListResponseWithStatus,
     DocumentAIAnalysisResponse, 
-    DocumentInfo 
+    DocumentInfo,
+    InvoiceMetadata,
+    InvoicesMetadataResponse,
+    GetInvoiceByIdResponse
 };

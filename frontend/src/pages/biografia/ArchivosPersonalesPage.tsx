@@ -96,6 +96,18 @@ interface ArchivoPersonal {
     };
     // Tipo detectado para filtrado local
     detectedType?: string; // factura, contrato, reporte, certificado, documento
+    // Metadatos específicos para documentos no estructurados (nuevos DTOs)
+    noStructuredMetadata?: {
+        documentID: string;
+        twinID: string;
+        estructura: string;
+        subcategoria: string;
+        totalChapters: number;
+        totalTokens: number;
+        totalPages: number;
+        processedAt: string;
+        searchScore: number;
+    };
 }
 
 // Tipos de documentos oficiales soportados
@@ -137,10 +149,12 @@ const SUBCATEGORIAS_ESTRUCTURA = {
     ],
     [ESTRUCTURA_DOCUMENTOS.NO_ESTRUCTURADO]: [
         { id: "contract", label: "Contratos", icon: "📄" },
+        { id: "cursos", label: "Cursos", icon: "🎓" },
         { id: "report", label: "Reportes", icon: "📊" },
         { id: "email", label: "Emails", icon: "✉️" },
         { id: "letter", label: "Cartas", icon: "💌" },
-        { id: "article", label: "Artículos", icon: "📰" }
+        { id: "article", label: "Artículos", icon: "📰" },
+        { id: "otros", label: "Otros", icon: "📁" }
     ]
 };
 
@@ -163,6 +177,11 @@ const ArchivosPersonalesPage: React.FC = () => {
     const [tipoDocumentoSeleccionado, setTipoDocumentoSeleccionado] = useState("passport");
     const [loadError, setLoadError] = useState<string | null>(null);
     const [uploadSuccess, setUploadSuccess] = useState(false);
+    
+    // Estados para validación de documentos no estructurados
+    const [tieneIndice, setTieneIndice] = useState<boolean>(false);
+    const [totalPaginas, setTotalPaginas] = useState<number>(1);
+    const [validationError, setValidationError] = useState<string | null>(null);
     
     // Estados para el orchestrator
     const [isProcessingOrchestrator, setIsProcessingOrchestrator] = useState(false);
@@ -830,7 +849,53 @@ const ArchivosPersonalesPage: React.FC = () => {
             // Usar filtrado directo en el backend cuando ambos filtros están activos y no son "todas"
             let documents: DocumentInfo[] = [];
             
-            if (estructuraFiltro !== "todas" && subcategoriaFiltro !== "todas") {
+            // Para documentos no estructurados, usar el endpoint de metadatos optimizado
+            if (estructuraFiltro === ESTRUCTURA_DOCUMENTOS.NO_ESTRUCTURADO) {
+                console.log(`🎯 Usando endpoint de metadatos para documentos no estructurados`);
+                try {
+                    const metadataResult = await documentApiService.searchNoStructuredDocumentsMetadata(
+                        TWIN_ID_STORAGE, 
+                        'no-estructurado'
+                    );
+                    
+                    if (metadataResult.success && metadataResult.documents) {
+                        // Convertir los metadatos a DocumentInfo para compatibilidad
+                        documents = metadataResult.documents.map(doc => ({
+                            id: doc.documentID,
+                            filename: `Documento ${doc.documentID}.pdf`, // Usar ID como nombre por ahora
+                            file_path: `twin-${doc.twinID}/${doc.estructura}/${doc.subcategoria}`,
+                            public_url: '', // No disponible en metadatos
+                            size_bytes: 0, // No disponible en metadatos
+                            document_type: doc.subcategoria,
+                            structure_type: doc.estructura,
+                            sub_category: doc.subcategoria,
+                            pages: doc.totalPages,
+                            last_modified: doc.processedAt,
+                            // Metadatos específicos de los nuevos DTOs para identificar documentos no estructurados
+                            noStructuredMetadata: {
+                                documentID: doc.documentID,
+                                twinID: doc.twinID,
+                                estructura: doc.estructura,
+                                subcategoria: doc.subcategoria,
+                                totalChapters: doc.totalChapters,
+                                totalTokens: doc.totalTokens,
+                                totalPages: doc.totalPages,
+                                processedAt: doc.processedAt,
+                                searchScore: doc.searchScore
+                            }
+                        }));
+                        
+                        console.log(`✅ Documentos no estructurados obtenidos: ${documents.length} documentos`);
+                    } else {
+                        console.warn('⚠️ No se obtuvieron documentos del endpoint de metadatos:', metadataResult.error);
+                        documents = [];
+                    }
+                } catch (error) {
+                    console.error('❌ Error al obtener metadatos de documentos no estructurados:', error);
+                    // Fallback al método original
+                    documents = await documentApiService.getAllTwinDocuments(TWIN_ID_STORAGE);
+                }
+            } else if (estructuraFiltro !== "todas" && subcategoriaFiltro !== "todas") {
                 console.log(`🎯 Usando filtrado directo en backend: ${estructuraFiltro}/${subcategoriaFiltro}`);
                 documents = await documentApiService.getAllTwinDocuments(
                     TWIN_ID_STORAGE, 
@@ -1363,6 +1428,10 @@ const ArchivosPersonalesPage: React.FC = () => {
         if (documentInputRef.current) {
             documentInputRef.current.value = '';
         }
+        // Reset validation fields for no-structured documents
+        setTieneIndice(false);
+        setTotalPaginas(1);
+        setValidationError(null);
     };
 
     // Función para abrir el modal de upload con estados limpios
@@ -1447,6 +1516,17 @@ const ArchivosPersonalesPage: React.FC = () => {
             }
         }
 
+        // Validación adicional para documentos no estructurados
+        if (estructuraFiltro === ESTRUCTURA_DOCUMENTOS.NO_ESTRUCTURADO && subcategoriaFiltro !== "todas") {
+            // Validar si requiere índice
+            if (!tieneIndice && totalPaginas > 30) {
+                setValidationError('Los documentos de más de 30 páginas requieren un índice');
+                alert('⚠️ Documento no válido\n\nLos documentos de más de 30 páginas sin índice no pueden ser procesados.\nPor favor, agregue un índice o tabla de contenidos al documento antes de subirlo.');
+                return;
+            }
+            console.log(`✅ Validación de documento no estructurado exitosa: Páginas=${totalPaginas}, Tiene índice=${tieneIndice}`);
+        }
+
         setIsUploading(true);
         setUploadProgress(0);
 
@@ -1517,7 +1597,7 @@ const ArchivosPersonalesPage: React.FC = () => {
                     );
                     console.log(`✅ Upload directo completado, response:`, response);
                 } else {
-                    // Para documentos estructurados y no-estructurados, usar el método tradicional
+                    // Para documentos estructurados, semi-estructurados y no-estructurados, usar el método apropiado
                     
                     // Obtener el label en español para usar en el directorio
                     const subcategoriaObj = SUBCATEGORIAS_ESTRUCTURA[estructuraFiltro]?.find(s => s.id === subcategoriaFiltro);
@@ -1525,12 +1605,31 @@ const ArchivosPersonalesPage: React.FC = () => {
                     
                     console.log(`📊 Subiendo documento ${estructuraFiltro} con subcategoría: ${subcategoriaParaDirectorio}`);
                     
-                    response = await documentApiService.uploadStructuredDocument(
-                        TWIN_ID_STORAGE,
-                        file,
-                        subcategoriaParaDirectorio, // Usar el label en español
-                        estructuraFiltro
-                    );
+                    if (estructuraFiltro === ESTRUCTURA_DOCUMENTOS.NO_ESTRUCTURADO) {
+                        // Usar el nuevo método específico para documentos no estructurados
+                        console.log(`📄 Subiendo documento no estructurado con metadata adicional:`, {
+                            totalPaginas,
+                            tieneIndice,
+                            subcategoria: subcategoriaParaDirectorio
+                        });
+                        
+                        response = await documentApiService.uploadNoStructuredDocument(
+                            TWIN_ID_STORAGE,
+                            file,
+                            subcategoriaParaDirectorio,
+                            estructuraFiltro,
+                            totalPaginas,
+                            tieneIndice
+                        );
+                    } else {
+                        // Para documentos estructurados y semi-estructurados, usar el método tradicional
+                        response = await documentApiService.uploadStructuredDocument(
+                            TWIN_ID_STORAGE,
+                            file,
+                            subcategoriaParaDirectorio, // Usar el label en español
+                            estructuraFiltro
+                        );
+                    }
                 }
             } else {
                 // Fallback: usar upload de documento oficial
@@ -2306,8 +2405,8 @@ const ArchivosPersonalesPage: React.FC = () => {
 
                 {/* Modal de Upload de Documentos Oficiales */}
                 {mostrarUploadOficial && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[85vh] overflow-y-auto">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-semibold flex items-center">
                                     {(() => {
@@ -2361,7 +2460,7 @@ const ArchivosPersonalesPage: React.FC = () => {
                             </div>
                             
                             {/* Selector de tipo de documento - solo visible para documentos oficiales */}
-                            {(estructuraFiltro === "todas" || subcategoriaFiltro === "todas") && (
+                            {(estructuraFiltro === "todas" || subcategoriaFiltro === "todas") && estructuraFiltro !== ESTRUCTURA_DOCUMENTOS.NO_ESTRUCTURADO && (
                                 <div className="mb-4">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Tipo de documento oficial
@@ -2399,6 +2498,109 @@ const ArchivosPersonalesPage: React.FC = () => {
                                     <p className="text-sm text-green-700">
                                         Estructura: {estructuraFiltro.charAt(0).toUpperCase() + estructuraFiltro.slice(1)}
                                     </p>
+                                </div>
+                            )}
+
+                            {/* Campos adicionales para documentos no estructurados */}
+                            {estructuraFiltro === ESTRUCTURA_DOCUMENTOS.NO_ESTRUCTURADO && subcategoriaFiltro !== "todas" && (
+                                <div className="mb-4 space-y-4">
+                                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                        <h4 className="text-sm font-medium text-yellow-900 mb-3">
+                                            📋 Información requerida para documentos no estructurados
+                                        </h4>
+                                        
+                                        {/* Campo: ¿Tiene índice? */}
+                                        <div className="mb-3">
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                ¿El documento tiene índice o tabla de contenidos?
+                                            </label>
+                                            <div className="flex space-x-4">
+                                                <label className="flex items-center">
+                                                    <input
+                                                        type="radio"
+                                                        name="tieneIndice"
+                                                        checked={tieneIndice === true}
+                                                        onChange={() => {
+                                                            setTieneIndice(true);
+                                                            setValidationError(null);
+                                                        }}
+                                                        className="mr-2"
+                                                    />
+                                                    <span className="text-sm">Sí</span>
+                                                </label>
+                                                <label className="flex items-center">
+                                                    <input
+                                                        type="radio"
+                                                        name="tieneIndice"
+                                                        checked={tieneIndice === false}
+                                                        onChange={() => {
+                                                            setTieneIndice(false);
+                                                            setValidationError(null);
+                                                        }}
+                                                        className="mr-2"
+                                                    />
+                                                    <span className="text-sm">No</span>
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        {/* Campo: Número de páginas */}
+                                        <div className="mb-3">
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                ¿Cuántas páginas tiene el documento?
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="9999"
+                                                value={totalPaginas}
+                                                onChange={(e) => {
+                                                    setTotalPaginas(parseInt(e.target.value) || 1);
+                                                    setValidationError(null);
+                                                }}
+                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                placeholder="Ej: 25"
+                                            />
+                                        </div>
+
+                                        {/* Mensaje de validación */}
+                                        {!tieneIndice && totalPaginas > 30 && (
+                                            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                                                <div className="flex items-start space-x-2">
+                                                    <X className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                                                    <div>
+                                                        <p className="text-sm font-medium text-red-800">
+                                                            ⚠️ Índice requerido
+                                                        </p>
+                                                        <p className="text-sm text-red-700">
+                                                            Los documentos de más de 30 páginas sin índice no pueden ser procesados. 
+                                                            Por favor, agregue un índice o tabla de contenidos al documento antes de subirlo.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Mensaje informativo para documentos válidos */}
+                                        {(tieneIndice || totalPaginas <= 30) && (
+                                            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                                                <div className="flex items-start space-x-2">
+                                                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                                    <div>
+                                                        <p className="text-sm font-medium text-green-800">
+                                                            ✅ Documento válido
+                                                        </p>
+                                                        <p className="text-sm text-green-700">
+                                                            {tieneIndice 
+                                                                ? "El documento tiene índice y puede ser procesado correctamente."
+                                                                : "El documento tiene menos de 30 páginas y puede ser procesado sin índice."
+                                                            }
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
@@ -2639,8 +2841,8 @@ const ArchivosPersonalesPage: React.FC = () => {
 
                 {/* Upload Modal (existente) */}
                 {mostrarUpload && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[85vh] overflow-y-auto">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="text-lg font-semibold">Subir Archivo</h3>
                                 <button
@@ -2653,14 +2855,30 @@ const ArchivosPersonalesPage: React.FC = () => {
                             
                             {!isUploading && !uploadSuccess ? (
                                 <div>
-                                    <div
-                                        onClick={handleFileUpload}
-                                        className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-400 transition-colors"
-                                    >
-                                        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                                        <p className="text-gray-600 mb-2">Haz clic para seleccionar un archivo</p>
-                                        <p className="text-sm text-gray-500">Máximo 10MB</p>
-                                    </div>
+                                    {/* Validar si el documento no estructurado puede ser subido */}
+                                    {estructuraFiltro === ESTRUCTURA_DOCUMENTOS.NO_ESTRUCTURADO && 
+                                     subcategoriaFiltro !== "todas" && 
+                                     !tieneIndice && 
+                                     totalPaginas > 30 ? (
+                                        // Área de upload deshabilitada para documentos no válidos
+                                        <div className="border-2 border-dashed border-red-300 rounded-lg p-8 text-center bg-red-50">
+                                            <X className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                                            <p className="text-red-600 mb-2 font-medium">Upload no permitido</p>
+                                            <p className="text-sm text-red-500">
+                                                Debe agregar un índice al documento antes de continuar
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        // Área de upload normal
+                                        <div
+                                            onClick={handleFileUpload}
+                                            className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-400 transition-colors"
+                                        >
+                                            <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                                            <p className="text-gray-600 mb-2">Haz clic para seleccionar un archivo</p>
+                                            <p className="text-sm text-gray-500">Máximo 10MB</p>
+                                        </div>
+                                    )}
                                     
                                     <input
                                         ref={fileInputRef}
@@ -2963,79 +3181,247 @@ const ArchivosPersonalesPage: React.FC = () => {
                             archivosFiltrados: archivosFiltrados.slice(0, 3).map(a => ({ nombre: a.nombre, estructura: a.estructura, subcategoria: a.subcategoria }))
                         })}
                         <div className={`grid gap-6 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"}`}>
-                        {archivosFiltrados.map((archivo) => (
-                            <div key={archivo.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div className="flex items-center space-x-3">
-                                        {getFileIcon(archivo.tipo)}
-                                        <div className="flex-1 min-w-0">
-                                            <h3 className="font-semibold text-gray-800 truncate text-xs" style={{ fontSize: '9px' }}>{archivo.nombre}</h3>
-                                            <p className="text-sm text-gray-500">{archivo.categoria}</p>
-                                            {/* Información de estructura */}
-                                            {archivo.estructura && (
-                                                <div className="flex items-center mt-1">
-                                                    <span className="text-xs">
-                                                        {getEstructuraInfo(archivo.estructura, archivo.subcategoria, archivo.nombre, archivo.categoria).icon}
-                                                    </span>
-                                                    <span className={`text-xs ml-1 ${getEstructuraInfo(archivo.estructura, archivo.subcategoria, archivo.nombre, archivo.categoria).color}`}>
-                                                        {getEstructuraInfo(archivo.estructura, archivo.subcategoria, archivo.nombre, archivo.categoria).label}
-                                                    </span>
+                            {archivosFiltrados.map((archivo) => {
+                                // Detectar si es un documento no estructurado con nuevos metadatos
+                                const isNoStructuredDoc = archivo.noStructuredMetadata != null;
+                                
+                                if (isNoStructuredDoc) {
+                                    // Card profesional ULTRA MEJORADO para documentos no estructurados
+                                    const metadata = archivo.noStructuredMetadata!;
+                                    return (
+                                        <div key={archivo.id} className="group bg-gradient-to-br from-purple-500 via-pink-500 to-red-500 rounded-3xl shadow-2xl border-4 border-yellow-400 p-8 hover:shadow-3xl hover:scale-[1.02] transition-all duration-700 relative overflow-hidden">
+                                            {/* Decoraciones de fondo MUY LLAMATIVAS */}
+                                            <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full -translate-y-20 translate-x-20 group-hover:scale-110 transition-transform duration-700 opacity-80"></div>
+                                            <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-green-400 to-blue-500 rounded-full translate-y-16 -translate-x-16 group-hover:scale-110 transition-transform duration-700 opacity-80"></div>
+                                            <div className="absolute top-1/2 left-1/2 w-20 h-20 bg-gradient-to-br from-pink-400 to-purple-600 rounded-full -translate-x-10 -translate-y-10 group-hover:rotate-45 transition-transform duration-700 opacity-80"></div>                                        {/* Header con icono ultra profesional */}
+                                        <div className="relative z-10 flex items-center justify-between mb-8">
+                                            <div className="flex items-center space-x-5">
+                                                <div className="relative">
+                                                    <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 via-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-2xl transform rotate-6 hover:rotate-0 transition-all duration-500 border-2 border-white/20">
+                                                        <FileText className="w-8 h-8 text-white drop-shadow-lg" />
+                                                    </div>
+                                                    <div className="absolute -top-2 -right-2 w-7 h-7 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center shadow-lg animate-pulse">
+                                                        <span className="text-white text-sm font-bold">✨</span>
+                                                    </div>
                                                 </div>
-                                            )}
+                                                <div>
+                                                    <h3 className="font-black text-gray-800 text-xl mb-1">📄 {metadata.documentID}</h3>
+                                                    <div className="flex items-center space-x-2">
+                                                        <span className="text-sm text-indigo-700 font-bold bg-gradient-to-r from-indigo-100 to-blue-100 px-3 py-1 rounded-full border border-indigo-200">
+                                                            {metadata.subcategoria}
+                                                        </span>
+                                                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">ID: {metadata.documentID.split('.')[0]}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center space-x-3">
+                                                <button 
+                                                    onClick={() => {
+                                                        navigate(`/twin-biografia/documento/${metadata.twinID}/${metadata.documentID}`);
+                                                    }}
+                                                    className="p-4 bg-gradient-to-br from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:-translate-y-1"
+                                                    title="Ver documento completo"
+                                                >
+                                                    <Eye size={20} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDeleteFile(archivo.id, `Documento ${metadata.documentID}`)}
+                                                    className="p-4 bg-gradient-to-br from-red-500 to-pink-600 text-white hover:from-red-600 hover:to-pink-700 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:-translate-y-1"
+                                                    title="Eliminar documento"
+                                                >
+                                                    <Trash2 size={20} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* TOKENS MUY PROMINENTES CON COLORES VIBRANTES */}
+                                        <div className="relative z-10 bg-gradient-to-r from-rose-100 via-orange-100 to-yellow-100 rounded-3xl p-8 border-3 border-gradient-to-r from-rose-400 to-yellow-400 shadow-2xl mb-8 hover:shadow-3xl transition-all duration-500 transform hover:scale-102">
+                                            <div className="flex items-center justify-center space-x-6">
+                                                <div className="relative">
+                                                    <div className="w-20 h-20 bg-gradient-to-br from-orange-400 via-rose-500 to-pink-600 rounded-3xl flex items-center justify-center shadow-3xl animate-pulse border-4 border-white">
+                                                        <span className="text-white text-3xl drop-shadow-lg">💎</span>
+                                                    </div>
+                                                    <div className="absolute -top-2 -right-2 w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center animate-spin-slow">
+                                                        <span className="text-white text-lg">✨</span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-center">
+                                                    <p className="text-4xl font-black bg-gradient-to-r from-orange-600 via-red-600 to-pink-600 bg-clip-text text-transparent mb-2 drop-shadow-lg">{metadata.totalTokens.toLocaleString()}</p>
+                                                    <p className="text-xl text-orange-700 font-black tracking-wide">🚀 TOKENS PROCESADOS</p>
+                                                </div>
+                                                {metadata.searchScore > 0 && (
+                                                    <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-4 shadow-xl border-2 border-yellow-300">
+                                                        <p className="text-2xl font-black text-yellow-700">⭐ {metadata.searchScore.toFixed(2)}</p>
+                                                        <p className="text-sm text-yellow-600 font-bold">RELEVANCIA</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Grid de estadísticas ULTRA COLORIDO */}
+                                        <div className="relative z-10 grid grid-cols-2 gap-6 mb-8">
+                                            {/* Capítulos con ICONO SVG VIBRANTE */}
+                                            <div className="bg-gradient-to-br from-orange-400 via-red-500 to-pink-500 rounded-3xl p-6 border-4 border-yellow-300 shadow-2xl hover:shadow-3xl transition-all duration-500 hover:scale-110 hover:rotate-1 relative overflow-hidden" style={{boxShadow: '0 25px 50px rgba(249, 115, 22, 0.8)'}}>
+                                                <div className="absolute inset-0 bg-gradient-to-r from-yellow-300 to-orange-300 opacity-30 animate-pulse"></div>
+                                                <div className="flex items-center space-x-4 relative z-10">
+                                                    <div className="relative">
+                                                        <div className="w-24 h-24 bg-gradient-to-br from-amber-400 via-orange-500 to-red-600 rounded-full flex items-center justify-center shadow-2xl animate-bounce border-6 border-white ring-8 ring-yellow-300" style={{boxShadow: '0 0 50px rgba(245, 158, 11, 1)'}}>
+                                                            <svg className="w-12 h-12 animate-pulse" viewBox="0 0 24 24" fill="none">
+                                                                <defs>
+                                                                    <linearGradient id="bookGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                                        <stop offset="0%" stopColor="#fbbf24" />
+                                                                        <stop offset="50%" stopColor="#f97316" />
+                                                                        <stop offset="100%" stopColor="#dc2626" />
+                                                                    </linearGradient>
+                                                                </defs>
+                                                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="url(#bookGradient)" strokeWidth="3" strokeLinecap="round"/>
+                                                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" fill="url(#bookGradient)" stroke="#ffffff" strokeWidth="2"/>
+                                                                <path d="M9 7h6M9 11h6M9 15h4" stroke="#ffffff" strokeWidth="2" strokeLinecap="round"/>
+                                                            </svg>
+                                                        </div>
+                                                        <div className="absolute -top-3 -right-3 w-12 h-12 bg-gradient-to-br from-lime-400 via-green-500 to-teal-600 rounded-full flex items-center justify-center animate-spin border-4 border-white" style={{boxShadow: '0 0 25px rgba(74, 222, 128, 1)'}}>
+                                                            <span className="text-white text-xl font-black animate-pulse">{metadata.totalChapters}</span>
+                                                        </div>
+                                                        <div className="absolute -bottom-2 -left-2 w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full animate-ping" style={{boxShadow: '0 0 20px rgba(168, 85, 247, 1)'}}></div>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-3xl font-black text-white animate-pulse drop-shadow-2xl">CAPÍTULOS</p>
+                                                        <p className="text-xl text-yellow-100 font-bold animate-bounce">Secciones Completas</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Páginas con ICONO SVG VIBRANTE */}
+                                            <div className="bg-gradient-to-br from-blue-500 via-purple-600 to-indigo-700 rounded-3xl p-6 border-4 border-cyan-300 shadow-2xl hover:shadow-3xl transition-all duration-500 hover:scale-110 hover:-rotate-1 relative overflow-hidden" style={{boxShadow: '0 25px 50px rgba(59, 130, 246, 0.8)'}}>
+                                                <div className="absolute inset-0 bg-gradient-to-r from-cyan-300 to-purple-300 opacity-30 animate-pulse"></div>
+                                                <div className="flex items-center space-x-4 relative z-10">
+                                                    <div className="relative">
+                                                        <div className="w-24 h-24 bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-2xl animate-bounce border-6 border-white ring-8 ring-cyan-300" style={{boxShadow: '0 0 50px rgba(34, 211, 238, 1)'}}>
+                                                            <svg className="w-12 h-12 animate-pulse" viewBox="0 0 24 24" fill="none">
+                                                                <defs>
+                                                                    <linearGradient id="pageGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                                        <stop offset="0%" stopColor="#22d3ee" />
+                                                                        <stop offset="50%" stopColor="#3b82f6" />
+                                                                        <stop offset="100%" stopColor="#8b5cf6" />
+                                                                    </linearGradient>
+                                                                </defs>
+                                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="url(#pageGradient)" stroke="#ffffff" strokeWidth="2"/>
+                                                                <path d="M14 2v6h6" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                                                <path d="M16 13H8M16 17H8M10 9H8" stroke="#ffffff" strokeWidth="2" strokeLinecap="round"/>
+                                                                <circle cx="12" cy="12" r="1" fill="#ffffff" className="animate-ping"/>
+                                                            </svg>
+                                                        </div>
+                                                        <div className="absolute -top-3 -right-3 w-12 h-12 bg-gradient-to-br from-emerald-400 via-teal-500 to-green-600 rounded-full flex items-center justify-center animate-spin border-4 border-white" style={{boxShadow: '0 0 25px rgba(16, 185, 129, 1)'}}>
+                                                            <span className="text-white text-xl font-black animate-pulse">{metadata.totalPages}</span>
+                                                        </div>
+                                                        <div className="absolute -bottom-2 -left-2 w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-full animate-ping" style={{boxShadow: '0 0 20px rgba(249, 115, 22, 1)'}}></div>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-3xl font-black text-white animate-pulse drop-shadow-2xl">PÁGINAS</p>
+                                                        <p className="text-xl text-cyan-100 font-bold animate-bounce">Contenido Total</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Footer con colores vibrantes */}
+                                        <div className="relative z-10 flex items-center justify-between">
+                                            <div className="flex items-center space-x-4">
+                                                <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl animate-pulse">
+                                                    <span className="text-white text-xl">�️</span>
+                                                </div>
+                                                <div>
+                                                    <p className="text-lg font-black text-blue-800">PROCESADO</p>
+                                                    <p className="text-sm font-bold text-blue-600">
+                                                        {new Date(metadata.processedAt).toLocaleDateString('es-ES')}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-700 text-white px-8 py-4 rounded-full font-black text-lg shadow-2xl animate-pulse border-4 border-white">
+                                                � NO ESTRUCTURADO
+                                                <span className="text-2xl">🎯</span> NO ESTRUCTURADO
+                                            </div>
                                         </div>
                                     </div>
-                                    
-                                    <div className="flex items-center space-x-1">
-                                        <button 
-                                            onClick={() => handleViewFile(archivo)}
-                                            className="text-gray-400 hover:text-blue-600"
-                                            title="Ver archivo"
-                                        >
-                                            <Eye size={14} />
-                                        </button>
-                                        <button 
-                                            onClick={() => {
-                                                // Descargar archivo usando SAS URL - FORZAR DESCARGA
-                                                const downloadUrl = archivo.documentMetadata?.sasUrl || archivo.url;
-                                                if (downloadUrl) {
-                                                    console.log(`📥 Descargando archivo: ${archivo.nombre} desde ${downloadUrl}`);
-                                                    
-                                                    // Método 1: Fetch + Blob para forzar descarga
-                                                    fetch(downloadUrl)
-                                                        .then(response => {
-                                                            if (!response.ok) {
-                                                                throw new Error('Error en la descarga');
-                                                            }
-                                                            return response.blob();
-                                                        })
-                                                        .then(blob => {
-                                                            // Crear URL temporal del blob
-                                                            const blobUrl = window.URL.createObjectURL(blob);
-                                                            const link = document.createElement('a');
-                                                            link.href = blobUrl;
-                                                            link.download = archivo.nombre; // Fuerza el nombre del archivo
-                                                            link.style.display = 'none';
-                                                            
-                                                            // Agregar al DOM, hacer clic, y limpiar
-                                                            document.body.appendChild(link);
-                                                            link.click();
-                                                            document.body.removeChild(link);
-                                                            
-                                                            // Limpiar URL temporal después de un momento
-                                                            setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
-                                                        })
-                                                        .catch(error => {
-                                                            console.error('❌ Error al descargar:', error);
-                                                            // Fallback: método tradicional si fetch falla
-                                                            const link = document.createElement('a');
-                                                            link.href = downloadUrl;
-                                                            link.download = archivo.nombre;
-                                                            link.target = '_blank';
-                                                            link.rel = 'noopener noreferrer';
-                                                            document.body.appendChild(link);
-                                                            link.click();
-                                                            document.body.removeChild(link);
-                                                        });
+                                );
+                                }
+                                
+                                // Card original para otros tipos de documentos
+                                return (
+                                    <div key={archivo.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+                                        <div className="flex items-start justify-between mb-4">
+                                            <div className="flex items-center space-x-3">
+                                                {getFileIcon(archivo.tipo)}
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="font-semibold text-gray-800 truncate text-xs" style={{ fontSize: '9px' }}>{archivo.nombre}</h3>
+                                                    <p className="text-sm text-gray-500">{archivo.categoria}</p>
+                                                    {/* Información de estructura */}
+                                                    {archivo.estructura && (
+                                                        <div className="flex items-center mt-1">
+                                                            <span className="text-xs">
+                                                                {getEstructuraInfo(archivo.estructura, archivo.subcategoria, archivo.nombre, archivo.categoria).icon}
+                                                            </span>
+                                                            <span className={`text-xs ml-1 ${getEstructuraInfo(archivo.estructura, archivo.subcategoria, archivo.nombre, archivo.categoria).color}`}>
+                                                                {getEstructuraInfo(archivo.estructura, archivo.subcategoria, archivo.nombre, archivo.categoria).label}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Botones de acción para documentos regulares */}
+                                        <div className="flex items-center space-x-1 mb-3">
+                                            <button 
+                                                onClick={() => handleViewFile(archivo)}
+                                                className="text-gray-400 hover:text-blue-600"
+                                                title="Ver archivo"
+                                            >
+                                                <Eye size={14} />
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                    // Descargar archivo usando SAS URL - FORZAR DESCARGA
+                                                    const downloadUrl = archivo.documentMetadata?.sasUrl || archivo.url;
+                                                    if (downloadUrl) {
+                                                        console.log(`📥 Descargando archivo: ${archivo.nombre} desde ${downloadUrl}`);
+                                                        
+                                                        // Método 1: Fetch + Blob para forzar descarga
+                                                        fetch(downloadUrl)
+                                                            .then(response => {
+                                                                if (!response.ok) {
+                                                                    throw new Error('Error en la descarga');
+                                                                }
+                                                                return response.blob();
+                                                            })
+                                                            .then(blob => {
+                                                                // Crear URL temporal del blob
+                                                                const blobUrl = window.URL.createObjectURL(blob);
+                                                                const link = document.createElement('a');
+                                                                link.href = blobUrl;
+                                                                link.download = archivo.nombre;
+                                                                link.style.display = 'none';
+                                                                
+                                                                // Agregar al DOM, hacer clic, y limpiar
+                                                                document.body.appendChild(link);
+                                                                link.click();
+                                                                document.body.removeChild(link);
+                                                                
+                                                                // Limpiar URL temporal después de un momento
+                                                                setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+                                                            })
+                                                            .catch(error => {
+                                                                console.error('❌ Error al descargar:', error);
+                                                                // Fallback: método tradicional si fetch falla
+                                                                const link = document.createElement('a');
+                                                                link.href = downloadUrl;
+                                                                link.download = archivo.nombre;
+                                                                link.target = '_blank';
+                                                                link.rel = 'noopener noreferrer';
+                                                                document.body.appendChild(link);
+                                                                link.click();
+                                                                document.body.removeChild(link);
+                                                            });
                                                 } else {
                                                     console.error('❌ No hay URL de descarga disponible para:', archivo.nombre);
                                                     alert('No hay URL de descarga disponible para este archivo');
@@ -3054,150 +3440,12 @@ const ArchivosPersonalesPage: React.FC = () => {
                                         </button>
                                     </div>
                                 </div>
-                                
-                                {(() => {
-                                    // Mostrar información relevante basada en los datos de CosmosDocumentSummary
-                                    const metadata = archivo.documentMetadata;
-                                    
-                                    // ✅ DEBUG: Log de metadata para cada archivo
-                                    console.log(`🔍 Metadata para "${archivo.nombre}":`, {
-                                        tieneMetadata: !!metadata,
-                                        vendorName: metadata?.vendorName,
-                                        invoiceTotal: metadata?.invoiceTotal,
-                                        invoiceNumber: metadata?.invoiceNumber,
-                                        metadataCompleto: metadata
-                                    });
-                                    
-                                    // Si es una factura con datos de Document Intelligence
-                                    if (metadata?.vendorName || metadata?.invoiceTotal || metadata?.invoiceNumber) {
-                                        return (
-                                            <div className="space-y-2 mb-3">
-                                                {/* Información del proveedor - MÁS PROMINENTE */}
-                                                {metadata.vendorName && (
-                                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-2">
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="flex items-center">
-                                                                <span className="text-blue-600 mr-2">🏢</span>
-                                                                <span className="font-semibold text-blue-800 text-sm">{metadata.vendorName}</span>
-                                                            </div>
-                                                            {metadata.vendorNameConfidence && metadata.vendorNameConfidence > 0.8 && (
-                                                                <div className="flex items-center">
-                                                                    <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
-                                                                        ✓ {Math.round(metadata.vendorNameConfidence * 100)}%
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                
-                                                {/* Total de la factura */}
-                                                {metadata.invoiceTotal && metadata.invoiceTotal > 0 && (
-                                                    <div className="flex items-center text-sm">
-                                                        <span className="text-gray-500 mr-2">💰</span>
-                                                        <span className="font-semibold text-green-700">
-                                                            {new Intl.NumberFormat('en-US', { 
-                                                                style: 'currency', 
-                                                                currency: 'USD' 
-                                                            }).format(metadata.invoiceTotal)}
-                                                        </span>
-                                                        {metadata.invoiceTotalConfidence && metadata.invoiceTotalConfidence > 0.8 && (
-                                                            <span className="ml-2 text-xs text-green-600">✓</span>
-                                                        )}
-                                                    </div>
-                                                )}
-                                                
-                                                {/* Número de factura */}
-                                                {metadata.invoiceNumber && (
-                                                    <div className="flex items-center text-sm">
-                                                        <span className="text-gray-500 mr-2">📄</span>
-                                                        <span className="text-gray-600 text-xs">#{metadata.invoiceNumber}</span>
-                                                    </div>
-                                                )}
-                                                
-                                                {/* Fecha de la factura */}
-                                                {metadata.invoiceDate && (
-                                                    <div className="flex items-center text-sm">
-                                                        <span className="text-gray-500 mr-2">📅</span>
-                                                        <span className="text-gray-600 text-xs">
-                                                            {new Date(metadata.invoiceDate).toLocaleDateString('es-ES')}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    }
-                                    
-                                    // Si tiene análisis de AI disponible
-                                    if (metadata?.hasAiCompleteAnalysis || metadata?.htmlReport) {
-                                        return (
-                                            <div className="mb-3">
-                                                <div className="flex items-center text-sm text-blue-600">
-                                                    <span className="mr-2">🧠</span>
-                                                    <span className="text-xs">Análisis de IA disponible</span>
-                                                    {metadata.aiDataFieldsCount && metadata.aiDataFieldsCount > 0 && (
-                                                        <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                                                            {metadata.aiDataFieldsCount} campos
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    }
-                                    
-                                    // Si tiene información de páginas
-                                    if (archivo.pages && archivo.pages > 1) {
-                                        return (
-                                            <div className="mb-3">
-                                                <div className="flex items-center text-sm text-gray-600">
-                                                    <span className="mr-2">📖</span>
-                                                    <span className="text-xs">{archivo.pages} páginas</span>
-                                                </div>
-                                            </div>
-                                        );
-                                    }
-                                    
-                                    // Fallback: mostrar descripción si existe
-                                    if (archivo.descripcion && archivo.descripcion.length < 200) {
-                                        return <p className="text-sm text-gray-600 mb-3">{archivo.descripcion}</p>;
-                                    }
-                                    
-                                    return null;
-                                })()}
-                                
-                                <div className="flex items-center justify-between text-sm text-gray-500">
-                                    <span>{formatFileSize(archivo.tamaño)}</span>
-                                    <span>{new Date(archivo.fechaSubida).toLocaleDateString()}</span>
-                                </div>
-                                
-                                {archivo.etiquetas.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mt-3">
-                                        {archivo.etiquetas
-                                            .filter((etiqueta) => {
-                                                // Filter out repetitive or unwanted tags
-                                                const lowerEtiqueta = etiqueta.toLowerCase();
-                                                return !lowerEtiqueta.includes('estructurado') &&
-                                                       !lowerEtiqueta.includes('factura') &&
-                                                       !lowerEtiqueta.includes('invoice') &&
-                                                       etiqueta.length > 1 && // Avoid single character tags
-                                                       etiqueta.length < 50; // Avoid overly long tags
-                                            })
-                                            .slice(0, 5) // Limit to 5 tags maximum
-                                            .map((etiqueta, index) => (
-                                            <span 
-                                                key={index}
-                                                className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs"
-                                            >
-                                                {etiqueta}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
+                            );
+                        })}
                         </div>
                     </>
                 )}
+                
                 
                 {/* Resumen y estadísticas */}
                 {!isLoading && (

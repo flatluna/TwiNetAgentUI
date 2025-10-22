@@ -12,7 +12,8 @@ import {
     ChevronLeft,
     ChevronRight,
     Grid,
-    X
+    X,
+    Loader
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -144,8 +145,17 @@ export default function CasaDetallesPage() {
     const [zonaSeleccionada, setZonaSeleccionada] = useState<string>('Exterior');
 
     // Estados para fotos
-    const [fotosZona, setFotosZona] = useState<Record<string, string[]>>({});
+    const [fotosZona, setFotosZona] = useState<Record<string, any[]>>({});
     const [subiendoFoto, setSubiendoFoto] = useState(false);
+    const [cargandoFotos, setCargandoFotos] = useState(false);
+    const [modalProgresoAI, setModalProgresoAI] = useState(false);
+    const [pasoActualAI, setPasoActualAI] = useState(1);
+    const [fotosSubiendose, setFotosSubiendose] = useState(0);
+    const [totalFotosSubir, setTotalFotosSubir] = useState(0);
+
+    // Estados para modal de detalles de foto
+    const [modalDetalleAbierto, setModalDetalleAbierto] = useState(false);
+    const [fotoDetalle, setFotoDetalle] = useState<any | null>(null);
 
     // Estados para carrusel
     const [carruselModalAbierto, setCarruselModalAbierto] = useState(false);
@@ -219,23 +229,28 @@ export default function CasaDetallesPage() {
         }
 
         try {
+            setCargandoFotos(true);
             console.log('📸 Cargando fotos de zona:', zona, 'para casa:', casaId);
             
             // Usar el método correcto: listPhotos(twinId, casaId, zona)
             const response = await twinApiService.listPhotos(twinId, casaId, zona);
             
             if (response.success && response.data) {
-                // Convertir array de objetos a array de URLs
+                // Almacenar los objetos completos de fotos con metadata
                 const fotosData = response.data.photos || [];
-                const fotosUrls: string[] = fotosData.map((foto: any) => 
-                    typeof foto === 'string' ? foto : foto.photoUrl || foto.url
-                ).filter(Boolean);
                 
-                console.log('✅ Fotos cargadas para zona', zona, ':', fotosUrls.length);
+                console.log('✅ Fotos cargadas para zona', zona, ':', fotosData.length);
+                console.log('📊 Datos de fotos:', fotosData.map(f => ({
+                    fileName: f.fileName,
+                    id: f.eTag,
+                    tipoEspacio: f.metadata?.tipoEspacio,
+                    hasMetadata: !!f.metadata,
+                    hasDetailsHTML: !!f.metadata?.detailsHTML && f.metadata.detailsHTML !== 'No HTML'
+                })));
                 
                 setFotosZona(prev => ({
                     ...prev,
-                    [zona]: fotosUrls
+                    [zona]: fotosData
                 }));
             } else {
                 console.log('📭 No hay fotos en zona:', zona);
@@ -250,6 +265,8 @@ export default function CasaDetallesPage() {
                 ...prev,
                 [zona]: []
             }));
+        } finally {
+            setCargandoFotos(false);
         }
     }, [twinId, casaId]);
 
@@ -299,12 +316,28 @@ export default function CasaDetallesPage() {
         const files = event.target.files;
         if (!files || files.length === 0 || !twinId || !casaId) return;
 
+        // Configurar y mostrar modal de progreso AI
+        setTotalFotosSubir(files.length);
+        setFotosSubiendose(0);
+        setPasoActualAI(1);
+        setModalProgresoAI(true);
         setSubiendoFoto(true);
 
         try {
             console.log('📸 Subiendo', files.length, 'fotos a zona:', zonaSeleccionada);
 
-            for (const file of Array.from(files)) {
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                
+                // Actualizar progreso
+                setFotosSubiendose(i + 1);
+                
+                // Simular pasos del proceso AI
+                setPasoActualAI(1); // Subiendo archivo
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                setPasoActualAI(2); // Procesando con AI
+                
                 // Usar el método correcto del servicio
                 const response = await twinApiService.uploadPhotoSimple(
                     twinId, 
@@ -313,6 +346,12 @@ export default function CasaDetallesPage() {
                     file.name,
                     zonaSeleccionada
                 );
+                
+                setPasoActualAI(3); // Generando descripción
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                setPasoActualAI(4); // Guardando análisis
+                await new Promise(resolve => setTimeout(resolve, 200));
                 
                 if (response.success) {
                     console.log('✅ Foto subida:', file.name);
@@ -329,6 +368,10 @@ export default function CasaDetallesPage() {
             setError('Error al subir las fotos');
         } finally {
             setSubiendoFoto(false);
+            setModalProgresoAI(false);
+            setPasoActualAI(1);
+            setFotosSubiendose(0);
+            setTotalFotosSubir(0);
             // Limpiar el input
             if (fotoInputRef.current) {
                 fotoInputRef.current.value = '';
@@ -384,7 +427,8 @@ export default function CasaDetallesPage() {
             console.log('🗑️ Eliminando foto:', fotoUrl);
             
             // Temporalmente removemos de la vista local, después implementaremos el backend
-            const nuevasFotos = obtenerFotosPorZona(zonaSeleccionada).filter(url => url !== fotoUrl);
+            const fotosZonaActual = obtenerFotosPorZona(zonaSeleccionada);
+            const nuevasFotos = fotosZonaActual.filter(foto => foto.photoUrl !== fotoUrl);
             setFotosZona(prev => ({
                 ...prev,
                 [zonaSeleccionada]: nuevasFotos
@@ -404,8 +448,28 @@ export default function CasaDetallesPage() {
     };
 
     // Función para obtener fotos de una zona específica
-    const obtenerFotosPorZona = (zona: string): string[] => {
+    const obtenerFotosPorZona = (zona: string): any[] => {
         return fotosZona[zona] || [];
+    };
+
+    // Función para abrir modal de detalles
+    const abrirModalDetalle = (foto: any) => {
+        console.log('📸 Abriendo modal de detalles para foto:', foto);
+        console.log('🔍 Metadata completa:', foto.metadata);
+        console.log('📝 DetailsHTML content:', foto.metadata?.detailsHTML);
+        setFotoDetalle(foto);
+        setModalDetalleAbierto(true);
+    };
+
+    // Función para cambiar de zona y recargar fotos
+    const cambiarZona = async (nuevaZona: string) => {
+        console.log('🔄 Cambiando a zona:', nuevaZona);
+        
+        // Cambiar la zona seleccionada
+        setZonaSeleccionada(nuevaZona);
+        
+        // Cargar fotos de la nueva zona (cargarFotosZona ya maneja el loading state)
+        await cargarFotosZona(nuevaZona);
     };
 
     // Funciones del carrusel
@@ -533,7 +597,7 @@ export default function CasaDetallesPage() {
                                         key={zona}
                                         variant={zonaSeleccionada === zona ? 'default' : 'outline'}
                                         size="sm"
-                                        onClick={() => setZonaSeleccionada(zona)}
+                                        onClick={() => cambiarZona(zona)}
                                         className="text-xs"
                                     >
                                         {zona}
@@ -546,22 +610,36 @@ export default function CasaDetallesPage() {
                         <Card className="p-6">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-semibold">Subir fotos a {zonaSeleccionada}</h3>
-                                <input
-                                    ref={fotoInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    onChange={manejarSubidaFoto}
-                                    className="hidden"
-                                />
-                                <Button
-                                    onClick={() => fotoInputRef.current?.click()}
-                                    disabled={subiendoFoto}
-                                    className="flex items-center gap-2"
-                                >
-                                    <Upload size={16} />
-                                    {subiendoFoto ? 'Subiendo...' : 'Subir Fotos'}
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                            console.log('🔄 Actualizando fotos de zona:', zonaSeleccionada);
+                                            cargarFotosZona(zonaSeleccionada);
+                                        }}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <Camera size={14} />
+                                        Actualizar Fotos
+                                    </Button>
+                                    <input
+                                        ref={fotoInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        onChange={manejarSubidaFoto}
+                                        className="hidden"
+                                    />
+                                    <Button
+                                        onClick={() => fotoInputRef.current?.click()}
+                                        disabled={subiendoFoto}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <Upload size={16} />
+                                        {subiendoFoto ? 'Subiendo...' : 'Subir Fotos'}
+                                    </Button>
+                                </div>
                             </div>
                         </Card>
 
@@ -584,43 +662,76 @@ export default function CasaDetallesPage() {
                                 )}
                             </div>
                             
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                {obtenerFotosPorZona(zonaSeleccionada).map((fotoUrl, index) => (
-                                    <div key={index} className="relative group">
-                                        <img
-                                            src={fotoUrl}
-                                            alt={`Foto ${index + 1} de ${zonaSeleccionada}`}
-                                            className="w-full h-48 object-cover rounded-lg cursor-pointer transition-transform hover:scale-105"
-                                            onClick={() => {
-                                                setIndiceCarruselActual(index);
-                                                setCarruselModalAbierto(true);
-                                            }}
-                                        />
-                                        
-                                        {/* Botón de eliminar en esquina superior derecha */}
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                eliminarFoto(fotoUrl);
-                                            }}
-                                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 p-0"
-                                            title="Eliminar foto"
-                                        >
-                                            <Trash2 size={14} />
-                                        </Button>
+                            {/* Loading state */}
+                            {cargandoFotos && (
+                                <div className="flex flex-col items-center justify-center py-12">
+                                    <Loader className="h-8 w-8 animate-spin text-blue-600 mb-4" />
+                                    <p className="text-gray-600 text-sm">Cargando fotos de {zonaSeleccionada}...</p>
+                                    <div className="w-full max-w-xs mt-3">
+                                        <div className="bg-gray-200 rounded-full h-2">
+                                            <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{width: '100%'}}></div>
+                                        </div>
                                     </div>
-                                ))}
-                                
-                                {obtenerFotosPorZona(zonaSeleccionada).length === 0 && (
-                                    <div className="col-span-full text-center py-12">
-                                        <Camera className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                                        <p className="text-gray-500">No hay fotos en esta zona</p>
-                                        <p className="text-sm text-gray-400 mt-1">Sube algunas fotos para comenzar</p>
-                                    </div>
-                                )}
-                            </div>
+                                </div>
+                            )}
+                            
+                            {/* Grid de fotos */}
+                            {!cargandoFotos && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {obtenerFotosPorZona(zonaSeleccionada).map((foto, index) => (
+                                    <Card key={foto.eTag || index} className="overflow-hidden">
+                                        <div className="relative">
+                                            <img
+                                                src={foto.photoUrl}
+                                                alt={foto.fileName}
+                                                className="w-full h-48 object-cover"
+                                            />
+                                            {/* Botón de eliminar en esquina superior derecha */}
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    eliminarFoto(foto.photoUrl);
+                                                }}
+                                                className="absolute top-2 right-2 h-8 w-8 p-0"
+                                                title="Eliminar foto"
+                                            >
+                                                <Trash2 size={14} />
+                                            </Button>
+                                        </div>
+                                        <div className="p-4">
+                                            <h4 className="font-medium text-sm mb-2 truncate" title={foto.fileName}>
+                                                {foto.fileName}
+                                            </h4>
+                                            <p className="text-xs text-gray-500 mb-2 truncate" title={foto.eTag}>
+                                                ID: {foto.eTag}
+                                            </p>
+                                            {foto.metadata?.tipoEspacio && (
+                                                <p className="text-xs text-blue-600 font-medium mb-3 truncate" title={foto.metadata.tipoEspacio}>
+                                                    📍 {foto.metadata.tipoEspacio}
+                                                </p>
+                                            )}
+                                            <Button
+                                                onClick={() => abrirModalDetalle(foto)}
+                                                className="w-full"
+                                                size="sm"
+                                            >
+                                                Ver Detalles
+                                            </Button>
+                                        </div>
+                                    </Card>
+                                    ))}
+                                    
+                                    {obtenerFotosPorZona(zonaSeleccionada).length === 0 && (
+                                        <div className="col-span-full text-center py-12">
+                                            <Camera className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                                            <p className="text-gray-500">No hay fotos en esta zona</p>
+                                            <p className="text-sm text-gray-400 mt-1">Sube algunas fotos para comenzar</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </Card>
                     </>
                 ) : (
@@ -766,7 +877,7 @@ export default function CasaDetallesPage() {
                     >
                         {/* Imagen principal */}
                         <img
-                            src={obtenerFotosPorZona(zonaSeleccionada)[indiceCarruselActual]}
+                            src={obtenerFotosPorZona(zonaSeleccionada)[indiceCarruselActual]?.photoUrl}
                             alt={`Foto ${indiceCarruselActual + 1} de ${zonaSeleccionada}`}
                             className="max-w-full max-h-full object-contain"
                         />
@@ -836,7 +947,7 @@ export default function CasaDetallesPage() {
                                 variant="destructive"
                                 onClick={() => {
                                     const fotoActual = obtenerFotosPorZona(zonaSeleccionada)[indiceCarruselActual];
-                                    eliminarFoto(fotoActual);
+                                    eliminarFoto(fotoActual.photoUrl);
                                     
                                     // Si era la última foto, cerrar el carrusel
                                     if (obtenerFotosPorZona(zonaSeleccionada).length === 1) {
@@ -1023,6 +1134,199 @@ export default function CasaDetallesPage() {
                                     Cerrar
                                 </Button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de detalles de foto */}
+            {modalDetalleAbierto && fotoDetalle && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+                    <div className="bg-white rounded-lg max-w-7xl w-full h-[95vh] sm:h-[90vh] overflow-hidden">
+                        {/* Header del modal */}
+                        <div className="flex items-center justify-between p-3 sm:p-4 border-b">
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-base sm:text-lg font-semibold truncate">{fotoDetalle.fileName}</h3>
+                                <p className="text-xs sm:text-sm text-gray-500 truncate">ID: {fotoDetalle.eTag}</p>
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setModalDetalleAbierto(false)}
+                                className="ml-2 flex-shrink-0"
+                            >
+                                <X size={16} />
+                            </Button>
+                        </div>
+
+                        {/* Contenido del modal */}
+                        <div className="flex flex-col lg:flex-row h-[calc(95vh-80px)] sm:h-[calc(90vh-100px)]">
+                            {/* Imagen */}
+                            <div className="w-full lg:w-2/5 h-48 sm:h-64 lg:h-auto bg-gray-100 flex items-center justify-center">
+                                <img
+                                    src={fotoDetalle.photoUrl}
+                                    alt={fotoDetalle.fileName}
+                                    className="max-w-full max-h-full object-contain"
+                                />
+                            </div>
+
+                            {/* Detalles */}
+                            <div className="flex-1 lg:w-3/5 p-3 sm:p-4 lg:p-6 overflow-y-auto">
+                                <h4 className="text-sm sm:text-md font-semibold mb-3">Análisis de la Imagen</h4>
+                                
+                                {/* Descripción genérica */}
+                                {fotoDetalle.metadata?.descripcionGenerica && (
+                                    <div className="mb-4">
+                                        <h5 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Descripción:</h5>
+                                        <p className="text-xs sm:text-sm text-gray-600 bg-gray-50 p-2 sm:p-3 rounded">
+                                            {fotoDetalle.metadata.descripcionGenerica}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Detalles HTML */}
+                                {fotoDetalle.metadata?.detailsHTML && fotoDetalle.metadata.detailsHTML !== 'No HTML' ? (
+                                    <div>
+                                        <h5 className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Análisis Detallado:</h5>
+                                        <div 
+                                            className="text-xs sm:text-sm prose prose-sm max-w-none bg-gray-50 p-2 sm:p-3 lg:p-4 rounded border overflow-x-auto"
+                                            dangerouslySetInnerHTML={{ __html: fotoDetalle.metadata.detailsHTML }}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-4 sm:py-8 text-gray-500">
+                                        <p className="text-xs sm:text-sm">No hay análisis detallado disponible para esta imagen.</p>
+                                    </div>
+                                )}
+
+                                {/* Información técnica */}
+                                <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t">
+                                    <h5 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Información Técnica:</h5>
+                                    <div className="space-y-1 text-xs text-gray-500">
+                                        <p className="break-all"><strong>Archivo:</strong> {fotoDetalle.fileName}</p>
+                                        <p className="break-all"><strong>Ruta:</strong> {fotoDetalle.filePath}</p>
+                                        <p className="break-all"><strong>ID:</strong> {fotoDetalle.eTag}</p>
+                                        {fotoDetalle.metadata?.tipoEspacio && (
+                                            <p><strong>Tipo de Espacio:</strong> {fotoDetalle.metadata.tipoEspacio}</p>
+                                        )}
+                                        {fotoDetalle.metadata?.twinID && (
+                                            <p className="break-all"><strong>Twin ID:</strong> {fotoDetalle.metadata.twinID}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer del modal */}
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-3 sm:p-4 border-t bg-gray-50 gap-2 sm:gap-0">
+                            <div className="text-xs sm:text-sm text-gray-600">
+                                Zona: {zonaSeleccionada}
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => window.open(fotoDetalle.photoUrl, '_blank')}
+                                    className="text-blue-600 hover:text-blue-700 text-xs sm:text-sm"
+                                >
+                                    <span className="hidden sm:inline">Abrir imagen completa</span>
+                                    <span className="sm:hidden">Ver imagen</span>
+                                </Button>
+                                <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={() => setModalDetalleAbierto(false)}
+                                    className="text-xs sm:text-sm"
+                                >
+                                    Cerrar
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de progreso AI */}
+            {modalProgresoAI && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl max-w-md w-full p-6 border border-blue-200 shadow-2xl">
+                        {/* Header colorido */}
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Loader className="h-8 w-8 text-white animate-spin" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">
+                                🤖 Procesando con IA
+                            </h3>
+                            <p className="text-sm text-gray-600">
+                                Nuestro sistema de inteligencia artificial está analizando tus fotos...
+                            </p>
+                        </div>
+
+                        {/* Progress de fotos */}
+                        <div className="mb-6">
+                            <div className="flex justify-between text-sm text-gray-700 mb-2">
+                                <span>Foto {fotosSubiendose} de {totalFotosSubir}</span>
+                                <span>{Math.round((fotosSubiendose / totalFotosSubir) * 100)}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-3">
+                                <div 
+                                    className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-500"
+                                    style={{width: `${(fotosSubiendose / totalFotosSubir) * 100}%`}}
+                                ></div>
+                            </div>
+                        </div>
+
+                        {/* Pasos del proceso */}
+                        <div className="space-y-3">
+                            {[
+                                { id: 1, emoji: "📤", titulo: "Subiendo archivo", descripcion: "Transfiriendo imagen al servidor" },
+                                { id: 2, emoji: "🔍", titulo: "Análisis visual con IA", descripcion: "Detectando elementos y características" },
+                                { id: 3, emoji: "📝", titulo: "Generando descripción", descripcion: "Creando análisis detallado del espacio" },
+                                { id: 4, emoji: "💾", titulo: "Guardando análisis", descripcion: "Almacenando datos procesados" }
+                            ].map((paso) => (
+                                <div 
+                                    key={paso.id}
+                                    className={`flex items-center p-3 rounded-lg transition-all duration-300 ${
+                                        pasoActualAI === paso.id 
+                                            ? 'bg-gradient-to-r from-blue-100 to-purple-100 border-l-4 border-blue-500 shadow-md' 
+                                            : pasoActualAI > paso.id 
+                                                ? 'bg-green-50 border-l-4 border-green-500' 
+                                                : 'bg-gray-50 border-l-4 border-gray-300'
+                                    }`}
+                                >
+                                    <div className="text-2xl mr-3">{paso.emoji}</div>
+                                    <div className="flex-1">
+                                        <div className={`font-medium text-sm ${
+                                            pasoActualAI === paso.id ? 'text-blue-700' : 
+                                            pasoActualAI > paso.id ? 'text-green-700' : 'text-gray-500'
+                                        }`}>
+                                            {paso.titulo}
+                                        </div>
+                                        <div className={`text-xs ${
+                                            pasoActualAI === paso.id ? 'text-blue-600' : 
+                                            pasoActualAI > paso.id ? 'text-green-600' : 'text-gray-400'
+                                        }`}>
+                                            {paso.descripcion}
+                                        </div>
+                                    </div>
+                                    {pasoActualAI === paso.id && (
+                                        <Loader className="h-4 w-4 text-blue-600 animate-spin" />
+                                    )}
+                                    {pasoActualAI > paso.id && (
+                                        <div className="h-4 w-4 bg-green-500 rounded-full flex items-center justify-center">
+                                            <span className="text-white text-xs">✓</span>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Footer informativo */}
+                        <div className="mt-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                            <p className="text-xs text-blue-700 text-center">
+                                💡 <strong>¿Sabías que?</strong> La IA analiza elementos arquitectónicos, colores, distribución y genera un análisis completo del espacio para ayudarte a entender mejor tu hogar.
+                            </p>
                         </div>
                     </div>
                 </div>
