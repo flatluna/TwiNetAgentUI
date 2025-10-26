@@ -444,6 +444,22 @@ class VehiculoApiService {
         vehiculos: result.data?.length || 0
       });
 
+      // Debug: Mostrar estructura completa del primer vehículo
+      if (result.data && result.data.length > 0) {
+        console.log('🔍 Estructura del primer vehículo del backend:', result.data[0]);
+        console.log('🔍 Precios específicos del primer vehículo:', {
+          originalListPrice: result.data[0].originalListPrice,
+          listPrice: result.data[0].listPrice,
+          currentPrice: result.data[0].currentPrice,
+          actualPaidPrice: result.data[0].actualPaidPrice,
+          // También revisar posibles campos en mayúscula usando acceso dinámico
+          OriginalListPrice: (result.data[0] as any).OriginalListPrice,
+          ListPrice: (result.data[0] as any).ListPrice,
+          CurrentPrice: (result.data[0] as any).CurrentPrice,
+          ActualPaidPrice: (result.data[0] as any).ActualPaidPrice
+        });
+      }
+
       return result;
     } catch (error) {
       console.error('❌ Error al obtener vehículos:', error);

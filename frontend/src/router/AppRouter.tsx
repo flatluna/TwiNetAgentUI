@@ -39,6 +39,7 @@ import DiarioViewPage from "@/pages/biografia/DiarioViewPage";
 import DiarioEditPage from "@/pages/biografia/DiarioEditPage";
 import CrearTwinPage from "@/pages/CrearTwinPage";
 import MisTwinsPage from "@/pages/MisTwinsPage";
+import EditarTwinPage from "@/pages/EditarTwinPage";
 import ConfiguracionPage from "@/pages/ConfiguracionPage";
 import ChatVoicePage from "@/pages/ChatVoicePage";
 import TwinAgentPage from "@/pages/TwinAgentPage";
@@ -68,6 +69,7 @@ import AgregarCursoConDocumentoPage from "@/pages/AgregarCursoConDocumentoPage";
 import CrearCursoAIPage from '@/pages/conocimiento/CrearCursoAIPage';
 import CursosManualPage from '@/pages/conocimiento/CursosManualPage';
 import CursosDocumentoPage from '@/pages/conocimiento/CursosDocumentoPage';
+import EstudiarCursoDocumento from '@/pages/conocimiento/EstudiarCursoDocumento';
 import CursosAIPage from '@/pages/conocimiento/CursosAIPage';
 import VerDetallesCapituloAIPage from "@/pages/conocimiento/VerDetallesCapituloAIPage";
 import DetallesCursoAIPage from "@/pages/conocimiento/DetallesCursoAIPage";
@@ -181,6 +183,10 @@ const router = createBrowserRouter([
             {
                 path: "mi-conocimiento/cursos/documento",
                 element: <ProtectedRoute><CursosDocumentoPage /></ProtectedRoute>,
+            },
+            {
+                path: "mi-conocimiento/cursos/documento/:id",
+                element: <ProtectedRoute><EstudiarCursoDocumento /></ProtectedRoute>,
             },
             {
                 path: "mi-conocimiento/cursos/agregar-documento",
@@ -416,6 +422,10 @@ const router = createBrowserRouter([
             {
                 path: "crear-twin",
                 element: <ProtectedRoute><CrearTwinPage /></ProtectedRoute>,
+            },
+            {
+                path: "editar-twin/:twinId",
+                element: <ProtectedRoute><EditarTwinPage /></ProtectedRoute>,
             },
             {
                 path: "mis-twins",

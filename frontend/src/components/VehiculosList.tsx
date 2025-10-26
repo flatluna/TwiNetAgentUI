@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Car } from '@/services/vehiculoApiService';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { 
   Car as CarIcon, 
   Calendar, 
@@ -15,7 +16,11 @@ import {
   Fuel,
   Settings,
   Upload,
-  Star
+  Star,
+  Camera,
+  ChevronLeft,
+  ChevronRight,
+  X
 } from 'lucide-react';
 
 interface VehiculosListProps {
@@ -32,6 +37,38 @@ const VehiculosList: React.FC<VehiculosListProps> = ({
   uploadingPhotos
 }) => {
   const navigate = useNavigate();
+  
+  // Estado para el modal de fotos
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [modalPhotos, setModalPhotos] = useState<string[]>([]);
+  const [modalCurrentIndex, setModalCurrentIndex] = useState(0);
+  const [modalVehicleTitle, setModalVehicleTitle] = useState('');
+
+  // Funciones para manejar el carrusel de fotos
+  const openPhotoModal = (vehiculo: Car) => {
+    if (vehiculo.photos && vehiculo.photos.length > 0) {
+      setModalPhotos(vehiculo.photos);
+      setModalCurrentIndex(0);
+      setModalVehicleTitle(`${vehiculo.make} ${vehiculo.model} ${vehiculo.year}`);
+      setPhotoModalOpen(true);
+    }
+  };
+
+  const nextPhoto = () => {
+    setModalCurrentIndex((prevIndex) => 
+      prevIndex === modalPhotos.length - 1 ? 0 : prevIndex + 1
+    );
+  };
+
+  const prevPhoto = () => {
+    setModalCurrentIndex((prevIndex) => 
+      prevIndex === 0 ? modalPhotos.length - 1 : prevIndex - 1
+    );
+  };
+
+  const goToPhoto = (index: number) => {
+    setModalCurrentIndex(index);
+  };
 
   if (loading) {
     return (
@@ -77,11 +114,28 @@ const VehiculosList: React.FC<VehiculosListProps> = ({
         {/* Header con imagen del vehículo */}
         <div className="relative h-48 bg-gradient-to-br from-blue-500 to-indigo-600">
           {(vehiculo.photos && vehiculo.photos.length > 0) ? (
-            <img 
-              src={vehiculo.photos[0]} 
-              alt={`${vehiculo.make} ${vehiculo.model}`}
-              className="w-full h-full object-cover"
-            />
+            <div 
+              className="relative w-full h-full cursor-pointer group"
+              onClick={() => openPhotoModal(vehiculo)}
+            >
+              <img 
+                src={vehiculo.photos[0]} 
+                alt={`${vehiculo.make} ${vehiculo.model}`}
+                className="w-full h-full object-cover transition-transform group-hover:scale-105"
+              />
+              {/* Overlay con indicador de fotos */}
+              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white bg-opacity-90 rounded-full p-3">
+                  <Camera className="w-6 h-6 text-gray-700" />
+                </div>
+              </div>
+              {/* Contador de fotos */}
+              {vehiculo.photos.length > 1 && (
+                <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded-full text-xs font-medium">
+                  {vehiculo.photos.length} fotos
+                </div>
+              )}
+            </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <CarIcon className="w-20 h-20 text-white opacity-50" />
@@ -272,7 +326,7 @@ const VehiculosList: React.FC<VehiculosListProps> = ({
           )}
 
           {/* Acciones */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-1">
             <Button
               variant="outline"
               size="sm"
@@ -300,17 +354,21 @@ const VehiculosList: React.FC<VehiculosListProps> = ({
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();
-                onUploadPhotos?.(vehiculo);
+                if (vehiculo.photos && vehiculo.photos.length > 0) {
+                  openPhotoModal(vehiculo);
+                } else {
+                  onUploadPhotos?.(vehiculo);
+                }
               }}
               disabled={uploadingPhotos === vehiculo.id}
-              className="text-blue-600 border-blue-300 hover:bg-blue-50"
+              className="text-purple-600 border-purple-300 hover:bg-purple-50"
             >
               {uploadingPhotos === vehiculo.id ? (
-                <div className="w-4 h-4 mr-1 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+                <div className="w-4 h-4 mr-1 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
               ) : (
-                <Upload className="w-4 h-4 mr-1" />
+                <Camera className="w-4 h-4 mr-1" />
               )}
-              Fotos
+              {vehiculo.photos && vehiculo.photos.length > 0 ? 'Fotos' : 'Subir'}
             </Button>
             <Button
               variant="outline"
@@ -322,7 +380,7 @@ const VehiculosList: React.FC<VehiculosListProps> = ({
               className="text-green-600 border-green-300 hover:bg-green-50"
             >
               <FileText className="w-4 h-4 mr-1" />
-              Documentos
+              Docs
             </Button>
           </div>
         </div>
@@ -331,9 +389,93 @@ const VehiculosList: React.FC<VehiculosListProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {vehiculos.map(renderCardVehiculo)}
-    </div>
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {vehiculos.map(renderCardVehiculo)}
+      </div>
+
+      {/* Modal de carrusel de fotos */}
+      <Dialog open={photoModalOpen} onOpenChange={setPhotoModalOpen}>
+        <DialogContent className="max-w-4xl w-full h-[80vh] p-0">
+          <DialogHeader className="p-4 pb-2">
+            <DialogTitle className="flex items-center justify-between">
+              <span>Fotos de {modalVehicleTitle}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPhotoModalOpen(false)}
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </DialogTitle>
+          </DialogHeader>
+          
+          {modalPhotos.length > 0 && (
+            <div className="flex-1 flex flex-col">
+              {/* Imagen principal */}
+              <div className="relative flex-1 bg-black flex items-center justify-center">
+                <img
+                  src={modalPhotos[modalCurrentIndex]}
+                  alt={`Foto ${modalCurrentIndex + 1} de ${modalVehicleTitle}`}
+                  className="max-w-full max-h-full object-contain"
+                />
+                
+                {/* Navegación */}
+                {modalPhotos.length > 1 && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={prevPhoto}
+                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white hover:bg-opacity-70"
+                    >
+                      <ChevronLeft className="h-6 w-6" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={nextPhoto}
+                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white hover:bg-opacity-70"
+                    >
+                      <ChevronRight className="h-6 w-6" />
+                    </Button>
+                  </>
+                )}
+                
+                {/* Contador */}
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-3 py-1 rounded-full text-sm">
+                  {modalCurrentIndex + 1} de {modalPhotos.length}
+                </div>
+              </div>
+              
+              {/* Miniatures */}
+              {modalPhotos.length > 1 && (
+                <div className="p-4 bg-gray-100">
+                  <div className="flex gap-2 overflow-x-auto">
+                    {modalPhotos.map((photo, index) => (
+                      <div
+                        key={index}
+                        className={`flex-shrink-0 w-16 h-12 cursor-pointer rounded border-2 overflow-hidden ${
+                          index === modalCurrentIndex ? 'border-blue-500' : 'border-gray-300'
+                        }`}
+                        onClick={() => goToPhoto(index)}
+                      >
+                        <img
+                          src={photo}
+                          alt={`Miniatura ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

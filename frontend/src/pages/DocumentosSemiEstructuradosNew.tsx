@@ -79,43 +79,47 @@ const DocumentosSemiEstructurados: React.FC = () => {
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2">
           {SUBCATEGORIAS_SEMI_ESTRUCTURADOS.map((subcategoria) => {
             const IconComponent = subcategoria.iconComponent;
             return (
               <div
                 key={subcategoria.id}
-                className="group bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer"
+                className="group bg-white rounded-lg shadow-md border border-gray-200 p-4 hover:shadow-lg hover:scale-[1.01] transition-all duration-300 cursor-pointer"
                 onClick={() => navigate(subcategoria.navigationPath)}
               >
-                {/* Header */}
-                <div className="flex items-center space-x-4 mb-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <IconComponent className={`w-8 h-8 text-white`} />
+                {/* Compact Header */}
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-md flex-shrink-0">
+                    <IconComponent className={`w-6 h-6 text-white`} />
                   </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors truncate">
                       {subcategoria.label}
                     </h3>
-                    <div className="flex items-center text-sm text-gray-500 mt-1">
-                      <span className="text-2xl mr-2">{subcategoria.icon}</span>
-                      <span>Gestionar documentos</span>
+                    <div className="flex items-center text-xs text-gray-500">
+                      <span className="text-lg mr-1">{subcategoria.icon}</span>
+                      <span className="truncate">Gestionar documentos</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Description */}
-                <p className="text-gray-600 text-sm mb-6 leading-relaxed">
+                {/* Compressed Description */}
+                <p className="text-gray-600 text-sm mb-3 leading-snug overflow-hidden" style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical' as const
+                }}>
                   {subcategoria.description}
                 </p>
 
-                {/* Action Button */}
-                <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-                  <span className="text-sm text-gray-500">
+                {/* Compact Action Footer */}
+                <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                  <span className="text-xs text-gray-500 truncate">
                     Haz clic para gestionar
                   </span>
-                  <div className={`w-3 h-3 rounded-full bg-gradient-to-r ${
+                  <div className={`w-2.5 h-2.5 rounded-full bg-gradient-to-r flex-shrink-0 ${
                     subcategoria.id === 'invoice' ? 'from-green-400 to-emerald-500' :
                     subcategoria.id === 'license' ? 'from-blue-400 to-indigo-500' :
                     subcategoria.id === 'certificate' ? 'from-yellow-400 to-orange-500' :
@@ -128,42 +132,41 @@ const DocumentosSemiEstructurados: React.FC = () => {
           })}
         </div>
 
-        {/* Info Section */}
-        <div className="mt-12 bg-white rounded-xl shadow-md p-8">
+        {/* Compact Info Section */}
+        <div className="mt-8 bg-white rounded-lg shadow-md p-6">
           <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            <h2 className="text-xl font-bold text-gray-900 mb-3">
               💡 Documentos Semi-estructurados
             </h2>
-            <p className="text-gray-600 max-w-3xl mx-auto leading-relaxed">
-              Los documentos semi-estructurados contienen información organizada en campos y secciones específicas. 
-              Cada tipo de documento tiene su propia página dedicada donde podrás subir, organizar y gestionar 
-              todos tus archivos de manera eficiente con funcionalidades específicas para cada categoría.
+            <p className="text-gray-600 max-w-2xl mx-auto leading-relaxed text-sm">
+              Los documentos semi-estructurados contienen información organizada en campos específicos. 
+              Cada tipo tiene su página dedicada para subir, organizar y gestionar archivos eficientemente.
             </p>
           </div>
           
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-            <div className="text-center p-4">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <DollarSign className="w-6 h-6 text-green-600" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+            <div className="text-center p-3">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <DollarSign className="w-5 h-5 text-green-600" />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Facturas</h3>
-              <p className="text-sm text-gray-600">Análisis inteligente con extracción de datos estructurados</p>
+              <h3 className="font-semibold text-gray-900 mb-1 text-sm">Facturas</h3>
+              <p className="text-xs text-gray-600">Análisis inteligente con extracción de datos</p>
             </div>
             
-            <div className="text-center p-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Award className="w-6 h-6 text-blue-600" />
+            <div className="text-center p-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <Award className="w-5 h-5 text-blue-600" />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Licencias y Certificados</h3>
-              <p className="text-sm text-gray-600">Gestión organizada de documentos oficiales</p>
+              <h3 className="font-semibold text-gray-900 mb-1 text-sm">Licencias y Certificados</h3>
+              <p className="text-xs text-gray-600">Gestión de documentos oficiales</p>
             </div>
             
-            <div className="text-center p-4">
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <CreditCard className="w-6 h-6 text-purple-600" />
+            <div className="text-center p-3 sm:col-span-2 lg:col-span-1">
+              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <CreditCard className="w-5 h-5 text-purple-600" />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Estados y Formularios</h3>
-              <p className="text-sm text-gray-600">Administración eficiente de documentos bancarios y oficiales</p>
+              <h3 className="font-semibold text-gray-900 mb-1 text-sm">Estados y Formularios</h3>
+              <p className="text-xs text-gray-600">Documentos bancarios y oficiales</p>
             </div>
           </div>
         </div>

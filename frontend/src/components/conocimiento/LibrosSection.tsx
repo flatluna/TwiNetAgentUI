@@ -19,6 +19,7 @@ import {
   X,
   PenTool,
   Search,
+  Loader,
   Filter
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,12 @@ const LibrosSection: React.FC<LibrosSectionProps> = ({ searchTerm = '' }) => {
   const [error, setError] = useState<string | null>(null);
   const [selectedBook, setSelectedBook] = useState<BookType | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  
+  // Estados para modal de progreso de actualización
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [progressStep, setProgressStep] = useState(1);
+  const [librosActualizados, setLibrosActualizados] = useState(0);
+  const [totalLibros, setTotalLibros] = useState(0);
   
   // Estados para filtros y búsqueda
   const [searchQuery, setSearchQuery] = useState('');
@@ -95,7 +102,13 @@ const LibrosSection: React.FC<LibrosSectionProps> = ({ searchTerm = '' }) => {
       }
 
       // Mapear los datos del backend al formato esperado
-      const booksData = Array.isArray(result.data) ? result.data.map((bookItem: any) => {
+      const booksData = Array.isArray(result.data) ? result.data.map((bookItem: any, index: number) => {
+        // Actualizar progreso si el modal está activo
+        if (showProgressModal) {
+          setLibrosActualizados(index + 1);
+          setTotalLibros(result.data.length);
+        }
+        
         // Los datos reales están en bookMainData
         const book = bookItem.bookMainData || bookItem;
         
@@ -154,8 +167,40 @@ const LibrosSection: React.FC<LibrosSectionProps> = ({ searchTerm = '' }) => {
   }, [accounts, loadBooks]); // Agregar loadBooks como dependencia
 
   // Función para refrescar manualmente
-  const handleRefresh = () => {
-    loadBooks();
+  const handleRefresh = async () => {
+    // Mostrar modal de progreso
+    setShowProgressModal(true);
+    setProgressStep(1);
+    setLibrosActualizados(0);
+    setTotalLibros(libros.length || 10); // Estimado si no hay libros cargados
+    
+    try {
+      // Simular pasos del proceso
+      setProgressStep(1); // Conectando al servidor
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      setProgressStep(2); // Obteniendo lista de libros
+      await new Promise(resolve => setTimeout(resolve, 600));
+      
+      setProgressStep(3); // Procesando datos
+      
+      // Llamar a la función real de carga
+      await loadBooks();
+      
+      setProgressStep(4); // Finalizando
+      await new Promise(resolve => setTimeout(resolve, 400));
+      
+    } catch (error) {
+      console.error('Error durante la actualización:', error);
+    } finally {
+      // Cerrar modal después de un breve delay
+      setTimeout(() => {
+        setShowProgressModal(false);
+        setProgressStep(1);
+        setLibrosActualizados(0);
+        setTotalLibros(0);
+      }, 500);
+    }
   };
 
   // Filtrar libros basado en searchTerm, searchQuery y filtros
@@ -463,117 +508,114 @@ const LibrosSection: React.FC<LibrosSectionProps> = ({ searchTerm = '' }) => {
             )}
           </div>
         ) : (
-          <div className="grid gap-6 max-w-4xl mx-auto">
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-2 max-w-6xl mx-auto">
             {filteredLibros.map((libro) => (
-              <Card key={libro.id} className="hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border-l-4 border-l-indigo-500 bg-gradient-to-r from-white to-indigo-50/30">
-                <CardContent className="p-6">
-                  <div className="flex flex-col lg:flex-row gap-6">
-                    {/* Portada con mejor diseño */}
+              <Card key={libro.id} className="hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 border-l-4 border-l-indigo-500 bg-gradient-to-r from-white to-indigo-50/30">
+                <CardContent className="p-4">
+                  <div className="flex flex-col md:flex-row gap-4">
+                    {/* Portada compacta */}
                     <div className="flex-shrink-0">
                       {libro.portada ? (
                         <img 
                           src={libro.portada} 
                           alt={libro.titulo}
-                          className="w-28 h-36 object-cover rounded-xl border-2 border-indigo-200 shadow-lg"
+                          className="w-20 h-28 object-cover rounded-lg border-2 border-indigo-200 shadow-md"
                           onError={(e) => {
-                            // Si la imagen falla, mostrar placeholder
                             const target = e.target as HTMLImageElement;
                             target.src = BooksPicture;
-                            target.onerror = null; // Evitar bucle infinito
+                            target.onerror = null;
                           }}
                         />
                       ) : (
                         <img 
                           src={BooksPicture} 
                           alt="Portada predeterminada"
-                          className="w-28 h-36 object-cover rounded-xl border-2 border-indigo-200 shadow-lg"
+                          className="w-20 h-28 object-cover rounded-lg border-2 border-indigo-200 shadow-md"
                         />
                       )}
                     </div>
 
-                    {/* Información del libro con mejor diseño */}
-                    <div className="flex-grow space-y-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="text-2xl font-bold text-gray-900 mb-2 leading-tight">
+                    {/* Información del libro comprimida */}
+                    <div className="flex-grow space-y-3 min-w-0">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-lg font-bold text-gray-900 leading-tight truncate">
                             {libro.titulo || 'Título no disponible'}
                             {libro.recomendado && (
-                              <Heart className="w-6 h-6 text-red-500 fill-red-500 inline ml-3" />
+                              <Heart className="w-4 h-4 text-red-500 fill-red-500 inline ml-2" />
                             )}
                           </h4>
-                          <div className="flex items-center gap-2 text-gray-700 mb-3">
-                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                              <User className="w-4 h-4 text-indigo-600" />
+                          <div className="flex items-center gap-2 text-gray-700 mt-1">
+                            <div className="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center">
+                              <User className="w-3 h-3 text-indigo-600" />
                             </div>
-                            <span className="text-base font-medium">{libro.autor || 'Autor desconocido'}</span>
+                            <span className="text-sm font-medium truncate">{libro.autor || 'Autor desconocido'}</span>
                           </div>
                         </div>
                         <Badge 
-                          className={
-                            libro.estado === 'Terminado' ? 'bg-green-500 hover:bg-green-600 text-white px-3 py-1' :
-                            libro.estado === 'Leyendo' ? 'bg-blue-500 hover:bg-blue-600 text-white px-3 py-1' : 
-                            'bg-gray-500 hover:bg-gray-600 text-white px-3 py-1'
-                          }
+                          className={`
+                            ${libro.estado === 'Terminado' ? 'bg-green-500 hover:bg-green-600' :
+                            libro.estado === 'Leyendo' ? 'bg-blue-500 hover:bg-blue-600' : 
+                            'bg-gray-500 hover:bg-gray-600'} 
+                            text-white px-2 py-1 text-xs whitespace-nowrap
+                          `}
                         >
                           {libro.estado}
                         </Badge>
                       </div>
 
-                      <div className="flex flex-wrap gap-6 text-sm">
+                      {/* Información comprimida */}
+                      <div className="flex flex-wrap gap-2 text-xs">
                         {libro.genero && (
-                          <div className="flex items-center gap-2 bg-purple-100 px-3 py-2 rounded-full">
-                            <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center">
-                              <Tag className="w-3 h-3 text-white" />
-                            </div>
-                            <span className="text-purple-700 font-medium">{libro.genero}</span>
-                          </div>
-                        )}
-                        {libro.fechaLectura && libro.fechaLectura.trim() !== '' && (
-                          <div className="flex items-center gap-2 bg-emerald-100 px-3 py-2 rounded-full">
-                            <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center">
-                              <Calendar className="w-3 h-3 text-white" />
-                            </div>
-                            <span className="text-emerald-700 font-medium">{formatDate(libro.fechaLectura)}</span>
+                          <div className="flex items-center gap-1 bg-purple-100 px-2 py-1 rounded-full">
+                            <Tag className="w-3 h-3 text-purple-600" />
+                            <span className="text-purple-700 truncate max-w-20">{libro.genero}</span>
                           </div>
                         )}
                         {libro.paginas && libro.paginas > 0 && (
-                          <div className="flex items-center gap-2 bg-orange-100 px-3 py-2 rounded-full">
-                            <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
-                              <Book className="w-3 h-3 text-white" />
-                            </div>
-                            <span className="text-orange-700 font-medium">{libro.paginas} páginas</span>
+                          <div className="flex items-center gap-1 bg-orange-100 px-2 py-1 rounded-full">
+                            <Book className="w-3 h-3 text-orange-600" />
+                            <span className="text-orange-700">{libro.paginas}p</span>
                           </div>
                         )}
                         {libro.editorial && libro.editorial.trim() !== '' && (
-                          <div className="flex items-center gap-2 bg-cyan-100 px-3 py-2 rounded-full">
-                            <div className="w-6 h-6 bg-cyan-500 rounded-full flex items-center justify-center">
-                              <BookOpen className="w-3 h-3 text-white" />
-                            </div>
-                            <span className="text-cyan-700 font-medium">{libro.editorial}</span>
+                          <div className="flex items-center gap-1 bg-cyan-100 px-2 py-1 rounded-full">
+                            <BookOpen className="w-3 h-3 text-cyan-600" />
+                            <span className="text-cyan-700 truncate max-w-20">{libro.editorial}</span>
                           </div>
                         )}
                       </div>
 
                       {libro.calificacion && libro.calificacion > 0 && (
-                        <StarRating rating={libro.calificacion} />
+                        <div className="flex items-center">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              className={`w-3 h-3 ${
+                                star <= libro.calificacion 
+                                  ? 'text-yellow-400 fill-yellow-400' 
+                                  : 'text-gray-300'
+                              }`}
+                            />
+                          ))}
+                        </div>
                       )}
 
-                      <div className="flex gap-3 pt-4">
+                      {/* Botones compactos */}
+                      <div className="flex gap-2 pt-2">
                         <Button 
                           size="sm" 
-                          className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
+                          className="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1 rounded text-xs flex-1 max-w-20"
                           onClick={() => handleShowDetails(libro)}
                         >
-                          <Eye className="w-4 h-4 mr-2" />
-                          Ver Detalles
+                          <Eye className="w-3 h-3 mr-1" />
+                          Ver
                         </Button>
                         <Button 
                           size="sm" 
-                          className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
+                          className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1 rounded text-xs flex-1 max-w-20"
                           onClick={() => {
                             const currentTwinId = getTwinId();
-                            console.log('🆔 TwinId al navegar:', currentTwinId);
-                            console.log('📚 BookData al navegar:', libro);
                             navigate(`/mi-conocimiento/libros/${libro.id}/notas`, { 
                               state: { 
                                 bookData: libro,
@@ -582,16 +624,14 @@ const LibrosSection: React.FC<LibrosSectionProps> = ({ searchTerm = '' }) => {
                             });
                           }}
                         >
-                          <PenTool className="w-4 h-4 mr-2" />
+                          <PenTool className="w-3 h-3 mr-1" />
                           Notas
                         </Button>
                         <Button 
                           size="sm" 
-                          className="bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
+                          className="bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 px-3 py-1 rounded text-xs flex-1 max-w-20"
                           onClick={() => {
                             const currentTwinId = getTwinId();
-                            console.log('🆔 TwinId al editar:', currentTwinId);
-                            console.log('📚 BookData al editar:', libro);
                             navigate(`/mi-conocimiento/libros/${libro.id}/editar`, { 
                               state: { 
                                 bookData: libro,
@@ -600,8 +640,8 @@ const LibrosSection: React.FC<LibrosSectionProps> = ({ searchTerm = '' }) => {
                             });
                           }}
                         >
-                          <Edit className="w-4 h-4 mr-2" />
-                          Editar
+                          <Edit className="w-3 h-3 mr-1" />
+                          Edit
                         </Button>
                       </div>
                     </div>
@@ -870,6 +910,94 @@ const LibrosSection: React.FC<LibrosSectionProps> = ({ searchTerm = '' }) => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de progreso de actualización */}
+      {showProgressModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-green-50 to-blue-50 rounded-xl max-w-md w-full p-6 border border-green-200 shadow-2xl">
+            {/* Header colorido */}
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Loader className="h-8 w-8 text-white animate-spin" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">
+                📚 Actualizando Biblioteca
+              </h3>
+              <p className="text-sm text-gray-600">
+                Sincronizando tu biblioteca personal desde el servidor...
+              </p>
+            </div>
+
+            {/* Progress de libros */}
+            {totalLibros > 0 && progressStep === 3 && (
+              <div className="mb-6">
+                <div className="flex justify-between text-sm text-gray-700 mb-2">
+                  <span>Libro {librosActualizados} de {totalLibros}</span>
+                  <span>{Math.round((librosActualizados / totalLibros) * 100)}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div 
+                    className="bg-gradient-to-r from-green-500 to-blue-600 h-3 rounded-full transition-all duration-500"
+                    style={{width: `${(librosActualizados / totalLibros) * 100}%`}}
+                  ></div>
+                </div>
+              </div>
+            )}
+
+            {/* Pasos del proceso */}
+            <div className="space-y-3">
+              {[
+                { id: 1, emoji: "🔗", titulo: "Conectando al servidor", descripcion: "Estableciendo conexión segura" },
+                { id: 2, emoji: "📋", titulo: "Obteniendo lista de libros", descripcion: "Descargando información actualizada" },
+                { id: 3, emoji: "📖", titulo: "Procesando biblioteca", descripcion: "Organizando y validando datos" },
+                { id: 4, emoji: "✅", titulo: "Finalizando actualización", descripcion: "Completando sincronización" }
+              ].map((paso) => (
+                <div 
+                  key={paso.id}
+                  className={`flex items-center p-3 rounded-lg transition-all duration-300 ${
+                    progressStep === paso.id 
+                      ? 'bg-gradient-to-r from-green-100 to-blue-100 border-l-4 border-green-500 shadow-md' 
+                      : progressStep > paso.id 
+                        ? 'bg-green-50 border-l-4 border-green-500' 
+                        : 'bg-gray-50 border-l-4 border-gray-300'
+                  }`}
+                >
+                  <div className="text-2xl mr-3">{paso.emoji}</div>
+                  <div className="flex-1">
+                    <div className={`font-medium text-sm ${
+                      progressStep === paso.id ? 'text-green-700' : 
+                      progressStep > paso.id ? 'text-green-700' : 'text-gray-500'
+                    }`}>
+                      {paso.titulo}
+                    </div>
+                    <div className={`text-xs ${
+                      progressStep === paso.id ? 'text-green-600' : 
+                      progressStep > paso.id ? 'text-green-600' : 'text-gray-400'
+                    }`}>
+                      {paso.descripcion}
+                    </div>
+                  </div>
+                  {progressStep === paso.id && (
+                    <Loader className="h-4 w-4 text-green-600 animate-spin" />
+                  )}
+                  {progressStep > paso.id && (
+                    <div className="h-4 w-4 bg-green-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs">✓</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Footer informativo */}
+            <div className="mt-6 p-3 bg-green-50 rounded-lg border border-green-200">
+              <p className="text-xs text-green-700 text-center">
+                📚 <strong>Actualizando</strong> tu biblioteca personal con la información más reciente del servidor. Esto puede incluir nuevas notas, análisis de IA y metadatos actualizados.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

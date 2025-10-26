@@ -17,6 +17,7 @@ const DetallesCursoPage: React.FC = () => {
   const { twinId, loading: twinIdLoading } = useTwinId();
   
   const [curso, setCurso] = useState<DetalleCurso | null>(null);
+  const [capitulos, setCapitulos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCursoAI, setIsCursoAI] = useState(false);
@@ -31,11 +32,27 @@ const DetallesCursoPage: React.FC = () => {
         // Verificar si se pasaron datos por estado desde la navegación
         const estadoNavegacion = location.state as { cursoAI?: any, esAI?: boolean };
         
+        console.log('🔍 Estado de navegación:', estadoNavegacion);
+        console.log('🔍 TwinID:', twinId);
+        console.log('🔍 CursoID:', cursoId);
+        
         if (estadoNavegacion && estadoNavegacion.esAI && estadoNavegacion.cursoAI) {
           // Usar datos que ya se cargaron, no hacer nueva llamada
-          console.log('� Usando datos de CursoAI pasados por navegación');
+          console.log('📚 Usando datos de CursoAI pasados por navegación');
           const cursoAI = estadoNavegacion.cursoAI;
+          console.log('📚 Datos completos del curso:', cursoAI);
           setIsCursoAI(true);
+          
+          // Extraer capítulos si existen
+          if (cursoAI.capitulos && Array.isArray(cursoAI.capitulos)) {
+            console.log(`📖 Encontrados ${cursoAI.capitulos.length} capítulos en el curso`);
+            console.log('📖 Capítulos completos:', cursoAI.capitulos);
+            setCapitulos(cursoAI.capitulos);
+          } else {
+            console.log('⚠️ No se encontraron capítulos en el curso');
+            console.log('⚠️ Estructura del curso:', Object.keys(cursoAI));
+            setCapitulos([]);
+          }
           
           // Mapear CursoAI a formato DetalleCurso
           const cursoMapeado: DetalleCurso = {
@@ -69,10 +86,11 @@ const DetallesCursoPage: React.FC = () => {
           return;
         }
 
-        console.log('�🔍 Cargando detalles del curso con TwinID real:', { twinId, cursoId });
+        console.log('🔍 Cargando detalles del curso con TwinID real:', { twinId, cursoId });
         
         // Detectar si es un CursoAI basado en la URL (fallback si no se pasaron datos)
         const isAI = window.location.pathname.includes('/cursosAI/');
+        console.log('🔍 Es curso AI (basado en URL):', isAI);
         setIsCursoAI(isAI);
         
         if (isAI) {
@@ -95,6 +113,15 @@ const DetallesCursoPage: React.FC = () => {
             const cursoAIEncontrado = cursosAIResponse.cursos.find((c: any) => c.id === cursoId);
             
             if (cursoAIEncontrado) {
+              // Extraer capítulos si existen
+              if (cursoAIEncontrado.capitulos && Array.isArray(cursoAIEncontrado.capitulos)) {
+                console.log(`📖 Encontrados ${cursoAIEncontrado.capitulos.length} capítulos en el curso desde backend`);
+                setCapitulos(cursoAIEncontrado.capitulos);
+              } else {
+                console.log('⚠️ No se encontraron capítulos en el curso desde backend');
+                setCapitulos([]);
+              }
+              
               // Mapear CursoAI a formato DetalleCurso
               const cursoMapeado: DetalleCurso = {
                 nombreClase: cursoAIEncontrado.nombreClase || 'CursoAI sin título',
@@ -230,8 +257,9 @@ const DetallesCursoPage: React.FC = () => {
       </div>
 
       <Tabs defaultValue="analisis" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="analisis">Análisis Completo</TabsTrigger>
+          <TabsTrigger value="capitulos">Capítulos ({capitulos.length})</TabsTrigger>
           <TabsTrigger value="informacion">Información</TabsTrigger>
           <TabsTrigger value="objetivos">Objetivos</TabsTrigger>
           <TabsTrigger value="enlaces">Enlaces</TabsTrigger>
@@ -248,6 +276,128 @@ const DetallesCursoPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               {curso.htmlDetails && renderHTMLContent(curso.htmlDetails)}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Pestaña de Capítulos */}
+        <TabsContent value="capitulos" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5" />
+                Contenido del Curso ({capitulos.length} capítulos)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {/* Debug info */}
+              <div className="mb-4 p-3 bg-gray-100 rounded text-sm">
+                <strong>Debug Info:</strong>
+                <br />
+                Capítulos disponibles: {capitulos.length}
+                <br />
+                Array de capítulos: {JSON.stringify(capitulos.map(c => c.titulo || 'Sin título'), null, 2)}
+              </div>
+              
+              {capitulos.length > 0 ? (
+                <div className="space-y-4">
+                  {capitulos.map((capitulo, index) => {
+                    console.log(`🔍 Renderizando capítulo ${index}:`, capitulo);
+                    return (
+                    <div 
+                      key={index} 
+                      className="border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => {
+                        // Navegar al capítulo específico o mostrar detalles
+                        console.log('Seleccionado capítulo:', capitulo);
+                      }}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h4 className="text-lg font-semibold text-gray-900 mb-1">
+                            {capitulo.titulo || `Capítulo ${index + 1}`}
+                          </h4>
+                          <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                            <span className="flex items-center gap-1">
+                              <BookOpen className="w-4 h-4" />
+                              Capítulo {capitulo.numeroCapitulo || index + 1}
+                            </span>
+                            {capitulo.duracionMinutos && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-4 h-4" />
+                                {capitulo.duracionMinutos} min
+                              </span>
+                            )}
+                            {capitulo.totalTokens && (
+                              <span className="flex items-center gap-1">
+                                <FileText className="w-4 h-4" />
+                                {capitulo.totalTokens} tokens
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {capitulo.completado && (
+                            <Badge className="bg-green-100 text-green-800">
+                              Completado
+                            </Badge>
+                          )}
+                          {capitulo.puntuacion && (
+                            <Badge variant="outline">
+                              {capitulo.puntuacion}/5 ⭐
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <p className="text-sm text-gray-700 mb-3 leading-relaxed">
+                        {capitulo.descripcion || 'Sin descripción disponible'}
+                      </p>
+                      
+                      {/* Tags del capítulo */}
+                      {capitulo.tags && capitulo.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {capitulo.tags.map((tag: string, tagIndex: number) => (
+                            <Badge key={tagIndex} variant="secondary" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Información adicional */}
+                      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                          {capitulo.quiz && (
+                            <span>🧪 {capitulo.quiz.length} quiz</span>
+                          )}
+                          {capitulo.ejemplos && (
+                            <span>💡 {capitulo.ejemplos.length} ejemplos</span>
+                          )}
+                          {capitulo.notas && (
+                            <span>📝 Notas disponibles</span>
+                          )}
+                        </div>
+                        <Button variant="ghost" size="sm">
+                          Ver Detalles →
+                        </Button>
+                      </div>
+                    </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <BookOpen className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <h3 className="text-lg font-medium mb-2">No hay capítulos disponibles</h3>
+                  <p className="text-sm">
+                    {isCursoAI 
+                      ? "Este curso AI aún no tiene capítulos generados" 
+                      : "Este curso no tiene contenido estructurado en capítulos"
+                    }
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

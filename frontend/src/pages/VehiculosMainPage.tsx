@@ -11,7 +11,7 @@ const VehiculosMainPage: React.FC = () => {
   const navigate = useNavigate();
   const { twinId: paramTwinId } = useParams();
   const { accounts } = useMsal();
-  const { obtenerVehiculos, subirFotosVehiculo } = useVehiculoService();
+  const { obtenerVehiculos, subirFotosVehiculo, obtenerVehiculoPorId } = useVehiculoService();
   
   const [vehiculos, setVehiculos] = useState<Car[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +70,42 @@ const VehiculosMainPage: React.FC = () => {
       const vehiculosData = await obtenerVehiculos(currentTwinId);
       
       console.log('✅ Vehículos cargados:', vehiculosData);
-      setVehiculos(vehiculosData);
+      
+      // Cargar detalles completos (incluyendo precios) para cada vehículo
+      const vehiculosConPrecios = await Promise.all(
+        vehiculosData.map(async (vehiculo) => {
+          try {
+            if (vehiculo.id) {
+              console.log(`� Cargando precios para vehículo: ${vehiculo.make} ${vehiculo.model}`);
+              const vehiculoCompleto = await obtenerVehiculoPorId(currentTwinId, vehiculo.id);
+              return {
+                ...vehiculo,
+                // Agregar los precios del detalle
+                currentPrice: vehiculoCompleto.currentPrice,
+                listPrice: vehiculoCompleto.listPrice,
+                originalListPrice: vehiculoCompleto.originalListPrice,
+                actualPaidPrice: vehiculoCompleto.actualPaidPrice
+              };
+            }
+            return vehiculo;
+          } catch (error) {
+            console.warn(`⚠️ No se pudieron cargar precios para vehículo ${vehiculo.id}:`, error);
+            return vehiculo;
+          }
+        })
+      );
+      
+      // Debug: Mostrar precios de vehículos después de cargar detalles
+      vehiculosConPrecios.forEach((vehiculo, index) => {
+        console.log(`🚗 Vehículo ${index + 1} (${vehiculo.make} ${vehiculo.model}) - PRECIOS ACTUALIZADOS:`, {
+          currentPrice: vehiculo.currentPrice,
+          listPrice: vehiculo.listPrice,
+          originalListPrice: vehiculo.originalListPrice,
+          actualPaidPrice: vehiculo.actualPaidPrice
+        });
+      });
+      
+      setVehiculos(vehiculosConPrecios);
     } catch (err) {
       console.error('❌ Error al cargar vehículos:', err);
       setError(err instanceof Error ? err.message : 'Error al cargar vehículos');
@@ -219,7 +254,15 @@ const VehiculosMainPage: React.FC = () => {
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
                   ${vehiculos
-                    .reduce((total, v) => total + (v.CurrentPrice || v.ListPrice || 0), 0)
+                    .reduce((total, v) => {
+                      // Usar currentPrice (Valor de Mercado Actual) como prioridad principal
+                      const precio = v.currentPrice || 
+                                    v.listPrice || 
+                                    v.originalListPrice || 
+                                    v.actualPaidPrice || 0;
+                      console.log(`💰 Calculando precio para ${v.make} ${v.model}: $${precio}`);
+                      return total + precio;
+                    }, 0)
                     .toLocaleString()}
                 </div>
               </CardContent>
@@ -233,7 +276,10 @@ const VehiculosMainPage: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-gray-900">
-                  {vehiculos.filter(v => v.Condition === 'Excellent').length}
+                  {vehiculos.filter(v => 
+                    (v.condition === 'Excellent' || v.Condition === 'Excellent') ||
+                    (v.condition === 'excelente' || v.Condition === 'excelente')
+                  ).length}
                 </div>
               </CardContent>
             </Card>
@@ -247,7 +293,10 @@ const VehiculosMainPage: React.FC = () => {
               <CardContent>
                 <div className="text-2xl font-bold text-gray-900">
                   {vehiculos.length > 0 
-                    ? Math.round(vehiculos.reduce((sum, v) => sum + v.Year, 0) / vehiculos.length)
+                    ? Math.round(vehiculos.reduce((sum, v) => {
+                        const year = v.year || v.Year || 0;
+                        return sum + year;
+                      }, 0) / vehiculos.length)
                     : '-'
                   }
                 </div>

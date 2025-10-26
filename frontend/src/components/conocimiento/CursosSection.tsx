@@ -322,7 +322,11 @@ const CursosSection: React.FC<CursosSectionProps> = ({ searchTerm = '', onlyTipo
 
     // preserve CursosInternet if present on the backend object (different naming variations)
     (mapped as any).CursosInternet = cursoAI.CursosInternet || cursoAI.cursosInternet || cursoAI.CursoBusqueda || cursoAI.cursoBusqueda || null;
-    return <CursoAIPageCard key={mapped.id} curso={mapped} />;
+    
+    // Determinar si es un curso generado desde documento
+    const isFromDocument = onlyTipo === 'document';
+    
+    return <CursoAIPageCard key={mapped.id} curso={mapped} isFromDocument={isFromDocument} />;
   };
 
   // Manejo de estados de carga

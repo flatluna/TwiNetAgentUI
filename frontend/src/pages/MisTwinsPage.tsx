@@ -1,8 +1,8 @@
 ﻿import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { RefreshCw, User, Calendar, MapPin, Mail } from "lucide-react";
+import { RefreshCw, User, Calendar, MapPin, Mail, Edit, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import twinApiService, { TwinProfileResponse } from "@/services/twinApiService";
+import twinApiService, { TwinProfileResponse, FamilyMember } from "@/services/twinApiService";
 import { useTwinId } from "@/hooks/useTwinId";
 
 const MisTwinsPage: React.FC = () => {
@@ -23,42 +23,39 @@ const MisTwinsPage: React.FC = () => {
         }
 
         try {
-            console.log('🔄 Loading twins for TwinId:', twinId);
-            const response = await twinApiService.getTwinProfilesByTwinId(twinId);
+            console.log('🔄 Loading family members (twins) for TwinId:', twinId);
+            const response = await twinApiService.getFamilyMembers(twinId);
             
             console.log('📊 Raw API Response:', response);
             
             if (response.success && response.data) {
-                console.log('✅ Response data:', response.data);
-                console.log('📝 Response structure:', {
-                    success: response.data.success,
-                    totalCount: response.data.totalCount,
-                    twinId: response.data.twinId,
-                    message: response.data.message,
-                    profilesType: typeof response.data.profiles,
-                    profiles: response.data.profiles
-                });
+                console.log('✅ Family members received:', response.data);
+                console.log('📝 Family members count:', response.data.length);
                 
-                // Backend returns profiles as a single object, not an array
-                if (response.data.success && response.data.profiles && response.data.totalCount > 0) {
-                    // We have a profile, put it in an array for the UI
-                    const profile = response.data.profiles;
-                    console.log('📋 Profile received:', profile);
-                    console.log('📋 Setting twins array with one profile:', [profile]);
-                    setTwins([profile]);
+                if (response.data.length > 0) {
+                    // Convert FamilyMember[] to TwinProfileResponse[] for UI compatibility
+                    const familyTwins = response.data.map(member => ({
+                        twinId: member.id || member.twinId,
+                        firstName: member.nombre || member.firstName || '',
+                        lastName: member.apellido || member.lastName || '',
+                        twinName: `${member.nombre || member.firstName || ''} ${member.apellido || member.lastName || ''}`.trim(),
+                        email: member.email || '',
+                        dateOfBirth: member.fechaNacimiento || '',
+                        birthCity: '',
+                        birthCountry: '',
+                        createdAt: member.createdDate || ''
+                    }));
+                    
+                    console.log('� Converted family twins:', familyTwins);
+                    setTwins(familyTwins);
                     setError(null);
-                } else if (response.data.success === false || response.data.totalCount === 0) {
-                    // No profiles found or backend returned success: false
-                    console.log('📭 No profiles found:', response.data.message);
-                    setTwins([]);
-                    setError(null); // Not an error, just no twins yet
                 } else {
-                    console.log('⚠️ Unexpected response structure:', response.data);
+                    console.log('📭 No family members found');
                     setTwins([]);
-                    setError(null);
+                    setError(null); // Not an error, just no family twins yet
                 }
             } else {
-                setError(response.error || 'Error al cargar twins');
+                setError(response.error || 'Error al cargar twins de familia');
                 setTwins([]);
             }
         } catch (error) {
@@ -176,10 +173,7 @@ const MisTwinsPage: React.FC = () => {
                             return (
                                 <div 
                                     key={uniqueKey}
-                                    className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow cursor-pointer"
-                                    onClick={() => {
-                                        console.log('🖱️ Twin clicked:', twin);
-                                    }}
+                                    className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
                                 >
                                     <div className="flex items-center space-x-4 mb-4">
                                         <div className="bg-blue-100 rounded-full p-3">
@@ -217,9 +211,41 @@ const MisTwinsPage: React.FC = () => {
                                     </div>
                                     
                                     <div className="mt-4 pt-4 border-t border-gray-100">
-                                        <p className="text-xs text-gray-500">
+                                        <p className="text-xs text-gray-500 mb-3">
                                             Creado: {new Date(twin.createdAt || Date.now()).toLocaleDateString()}
                                         </p>
+                                        
+                                        {/* Action Buttons */}
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="flex-1 flex items-center justify-center gap-2"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    console.log('👁️ Ver Twin:', twin);
+                                                    // Navigate to twin profile or details page
+                                                    navigate(`/twin/${twin.twinId}/perfil`);
+                                                }}
+                                            >
+                                                <Eye className="w-4 h-4" />
+                                                Ver
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="flex-1 flex items-center justify-center gap-2"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    console.log('✏️ Editar Twin:', twin);
+                                                    // Navigate to edit twin page
+                                                    navigate(`/editar-twin/${twin.twinId}`);
+                                                }}
+                                            >
+                                                <Edit className="w-4 h-4" />
+                                                Editar
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             );

@@ -10,9 +10,12 @@ interface PreguntaQuizAI { Pregunta: string; Opciones: string[]; RespuestaCorrec
 interface CapituloCreadoAI { Titulo: string; Objetivos: string[]; Contenido: string; Ejemplos: string[]; Resumen: string; Pagina: number; Quizes: PreguntaQuizAI[] }
 interface CursoCreadoAI { Indice: IndexAI[]; NombreClase: string; Descripcion: string; Capitulos: CapituloCreadoAI[]; DuracionEstimada: string; Etiquetas: string[]; TwinID: string; id: string }
 
-interface Props { curso: CursoCreadoAI }
+interface Props { 
+  curso: CursoCreadoAI;
+  isFromDocument?: boolean; // Nueva prop para indicar si es de documento
+}
 
-const CursoAIPageCard: React.FC<Props> = ({ curso }) => {
+const CursoAIPageCard: React.FC<Props> = ({ curso, isFromDocument = false }) => {
   const navigate = useNavigate();
   const titulo = curso.NombreClase || 'Curso AI sin título';
   const descripcion = curso.Descripcion || '';
@@ -21,12 +24,25 @@ const CursoAIPageCard: React.FC<Props> = ({ curso }) => {
   const capCount = Array.isArray(curso.Capitulos) ? curso.Capitulos.length : 0;
   
   // Calcular total de objetivos en todos los capítulos
-  const totalObjetivos = curso.Capitulos?.reduce((total, cap) => 
-    total + (Array.isArray(cap.Objetivos) ? cap.Objetivos.length : 0), 0) || 0;
+  const totalObjetivos = curso.Capitulos?.reduce((total, cap) => {
+    // Para cursos AI: cap.Objetivos (array)
+    // Para cursos documento: no tienen objetivos específicos, usar 1 por capítulo
+    if (isFromDocument) {
+      return total + 1; // Cada capítulo cuenta como 1 objetivo
+    }
+    return total + (Array.isArray(cap.Objetivos) ? cap.Objetivos.length : 0);
+  }, 0) || 0;
   
   // Calcular total de quizzes
-  const totalQuizzes = curso.Capitulos?.reduce((total, cap) => 
-    total + (Array.isArray(cap.Quizes) ? cap.Quizes.length : 0), 0) || 0;
+  const totalQuizzes = curso.Capitulos?.reduce((total, cap) => {
+    // Para cursos AI: cap.Quizes (array)
+    // Para cursos documento: cap.quiz (array)
+    if (isFromDocument) {
+      const quiz = (cap as any).quiz;
+      return total + (Array.isArray(quiz) ? quiz.length : 0);
+    }
+    return total + (Array.isArray(cap.Quizes) ? cap.Quizes.length : 0);
+  }, 0) || 0;
 
   return (
     <Card className="group hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 border-0 bg-white overflow-hidden relative">
@@ -114,17 +130,33 @@ const CursoAIPageCard: React.FC<Props> = ({ curso }) => {
         <Button
           aria-label={`Comenzar ${titulo}`}
           className="w-full h-12 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border-0"
-          onClick={() => navigate(`/mi-conocimiento/cursosAI/overview/${curso.id}`, { 
-            state: { 
-              cursoAI: curso, 
-              esAI: true, 
-              CursosInternet: (curso as any).CursosInternet || (curso as any).cursosInternet || null, 
-              cursosInternet: (curso as any).cursosInternet || (curso as any).CursosInternet || null 
-            } 
-          })}
+          onClick={() => {
+            if (isFromDocument) {
+              // Para cursos generados desde documento, navegar a la nueva página de estudio
+              navigate(`/mi-conocimiento/cursos/documento/${curso.id}`, { 
+                state: { 
+                  curso: curso,
+                  esAI: true, 
+                  esDocumento: true,
+                  CursosInternet: (curso as any).CursosInternet || (curso as any).cursosInternet || null, 
+                  cursosInternet: (curso as any).cursosInternet || (curso as any).CursosInternet || null 
+                } 
+              });
+            } else {
+              // Para cursos AI puros, usar la ruta original
+              navigate(`/mi-conocimiento/cursosAI/overview/${curso.id}`, { 
+                state: { 
+                  cursoAI: curso, 
+                  esAI: true, 
+                  CursosInternet: (curso as any).CursosInternet || (curso as any).cursosInternet || null, 
+                  cursosInternet: (curso as any).cursosInternet || (curso as any).CursosInternet || null 
+                } 
+              });
+            }
+          }}
         >
           <BookOpen className="w-5 h-5 mr-2" />
-          Comenzar Curso
+          {isFromDocument ? 'Estudiar Curso' : 'Comenzar Curso'}
         </Button>
 
         {/* AI Disclaimer */}

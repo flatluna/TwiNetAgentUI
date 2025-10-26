@@ -301,22 +301,64 @@ const DetallesCursoAIPage: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Optionally show full chapter list below */}
-          <div className="grid gap-4">
-            {(curso.Capitulos || []).map((cap, i) => (
-              <Card key={cap.Titulo + '-' + i} className="p-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="text-lg font-semibold">{cap.Titulo}</div>
-                    {cap.Resumen && <p className="text-sm text-gray-600 mt-2 line-clamp-3">{cap.Resumen}</p>}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Button size="sm" variant="outline" onClick={() => navigate(`/mi-conocimiento/cursosAI/${curso.id}/capitulos/${i}/ai-detalle`, { state: { cursoAI: curso, capitulo: cap, esAI: true } })}>Ver</Button>
-                  </div>
+          {/* Debug Info */}
+          <Card className="mb-4 p-4 bg-blue-50 border-blue-200">
+            <h3 className="text-lg font-semibold text-blue-800 mb-2">Debug Info - Capítulos</h3>
+            <div className="text-sm space-y-1">
+              <p><strong>Curso ID:</strong> {curso?.id}</p>
+              <p><strong>Nombre:</strong> {curso?.NombreClase}</p>
+              <p><strong>Capítulos length:</strong> {curso.Capitulos?.length ?? 'undefined'}</p>
+              <p><strong>Capítulos array:</strong> {JSON.stringify(curso.Capitulos?.map(c => c.Titulo) || [], null, 2)}</p>
+            </div>
+          </Card>
+
+          {/* Capítulos del Curso */}
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="text-xl">Capítulos del Curso ({curso.Capitulos?.length ?? 0})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!curso.Capitulos || curso.Capitulos.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No hay capítulos disponibles</p>
+                  <p className="text-sm">Debug: {JSON.stringify(curso.Capitulos)}</p>
                 </div>
-              </Card>
-            ))}
-          </div>
+              ) : (
+                <div className="grid gap-4">
+                  {curso.Capitulos.map((cap, i) => (
+                    <Card key={cap.Titulo + '-' + i} className="p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="text-lg font-semibold text-gray-800">
+                            Capítulo {i + 1}: {cap.Titulo}
+                          </div>
+                          {cap.Resumen && (
+                            <p className="text-sm text-gray-600 mt-2 line-clamp-3">{cap.Resumen}</p>
+                          )}
+                          <div className="mt-2 text-xs text-gray-500">
+                            {cap.DuracionEstimada && <span className="mr-4">⏱️ {cap.DuracionEstimada}</span>}
+                            {cap.Tokens && <span>🎯 {cap.Tokens} tokens</span>}
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2 ml-4">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="hover:bg-blue-50"
+                            onClick={() => navigate(`/mi-conocimiento/cursosAI/${curso.id}/capitulos/${i}/ai-detalle`, { 
+                              state: { cursoAI: curso, capitulo: cap, esAI: true } 
+                            })}
+                          >
+                            Ver Capítulo
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
   </>) }
   </div>
 

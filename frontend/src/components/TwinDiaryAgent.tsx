@@ -38,9 +38,10 @@ interface TwinDiaryAgentProps {
     twinId?: string;
     cursoId: string;
     capituloId?: string;
+    capituloTitulo?: string;
 }
 
-const TwinDiaryAgent: React.FC<TwinDiaryAgentProps> = ({ courseName, twinId, cursoId, capituloId }) => {
+const TwinDiaryAgent: React.FC<TwinDiaryAgentProps> = ({ courseName, twinId, cursoId, capituloId, capituloTitulo }) => {
     // Prefer twinId from MSAL account when available
     const { accounts } = useMsal();
     const resolvedTwinId = twinId || accounts?.[0]?.localAccountId || (window as any).TWIN_ID || null;
@@ -118,14 +119,15 @@ const TwinDiaryAgent: React.FC<TwinDiaryAgentProps> = ({ courseName, twinId, cur
 
         try {
             console.log('📚 Enviando pregunta al Twin Cursos:', userMessage.content);
-            // Usar el endpoint específico para capítulos si capituloId está disponible
-            const endpoint = capituloId 
-                ? `/api/twins/${resolvedTwinId}/cursos/${cursoId}/capitulos/${capituloId}/ask-question`
-                : `/api/twins/${resolvedTwinId}/cursos/${cursoId}/ask-question`;
+            // Siempre usar el endpoint general del curso
+            const endpoint = `/api/twins/${resolvedTwinId}/cursos/${cursoId}/ask-question`;
             
-            const body = capituloId 
-                ? { Question: userMessage.content } // Para el endpoint específico de capítulo
-                : { Question: userMessage.content, CapituloId: capituloId || undefined }; // Para el endpoint general
+            // Enviar la pregunta y opcionalmente el capituloId en el body
+            const body = {
+                Question: userMessage.content,
+                CapituloId: capituloId ? parseInt(capituloId, 10) : undefined,
+                Titulo: capituloTitulo || ''
+            };
             
             console.log('🔗 Endpoint:', endpoint);
             console.log('📦 Body:', body);

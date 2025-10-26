@@ -13,6 +13,33 @@ console.log('🔧 Development mode:', import.meta.env.DEV);
 
 const API_KEY = import.meta.env.VITE_API_KEY || 'B509918774DDE22A5BF94EDB4F145CB6E06F1CBCCC49D492D27FFD4AC3667A71';
 
+// Interface for Family Data (exact match with backend FamilyData class)
+export interface FamilyData {
+    Id?: string;
+    TwinID?: string;
+    
+    // Campos básicos existentes actualizados
+    Parentesco: string;
+    Nombre: string;
+    Apellido: string;
+    Email: string;
+    Telefono: string;
+    FechaNacimiento: string;
+    
+    // Nuevos campos agregados del formulario
+    NombreTwin: string;
+    DireccionCompleta: string;
+    PaisNacimiento: string;
+    Nacionalidad: string;
+    Genero: string;
+    Ocupacion: string;
+    Intereses: string[];
+    Idiomas: string[];
+    
+    // Campos existentes mantenidos
+    NumeroCelular: string;
+}
+
 // Interface for Family Member (actualizada según nueva API)
 export interface FamilyMember {
     id?: string;
@@ -28,6 +55,17 @@ export interface FamilyMember {
     createdDate?: string; // Cambiado de createdAt
     type?: string;       // Nuevo campo para tipo de documento
     
+    // Nuevos campos agregados del formulario (match with FamilyData)
+    telefono?: string;
+    nombreTwin?: string;
+    direccionCompleta?: string;
+    paisNacimiento?: string;
+    nacionalidad?: string;
+    genero?: string;
+    ocupacion?: string;
+    intereses?: string[];
+    idiomas?: string[];
+    
     // Campos legacy para compatibilidad (deprecated)
     firstName?: string;  // @deprecated - usar 'nombre'
     lastName?: string;   // @deprecated - usar 'apellido'
@@ -41,7 +79,7 @@ export interface FamilyMember {
     
     // Campos removidos en nueva API
     address?: string;      // @deprecated - no usado en nueva API
-    occupation?: string;   // @deprecated - no usado en nueva API
+    occupation?: string;   // @deprecated - usar 'ocupacion'
     isAlive?: boolean;     // @deprecated - no usado en nueva API
     deathDate?: string;    // @deprecated - no usado en nueva API
     emergencyContact?: boolean; // @deprecated - no usado en nueva API
@@ -1215,13 +1253,13 @@ class TwinApiService {
             return {
                 success: true,
                 data: data,
-                error: null
+                error: undefined
             };
         } catch (error) {
             console.error('❌ Error uploading photo with UploadFamilyPhoto:', error);
             return {
                 success: false,
-                data: null,
+                data: undefined,
                 error: error instanceof Error ? error.message : 'Error desconocido al subir la foto'
             };
         }
@@ -1763,6 +1801,82 @@ class TwinApiService {
     }
 
     /**
+     * Get a specific family member by ID
+     * GET /api/twins/{twinId}/family/{familyId}
+     */
+    async getFamilyById(twinId: string, familyId: string): Promise<ApiResponse<FamilyMember>> {
+        console.log('📤 API Service - Getting family member by ID:', familyId, 'for twin:', twinId);
+        
+        try {
+            const response = await this.makeRequest<{
+                success: boolean;
+                family: FamilyMember;
+                twinId: string;
+                message: string;
+            }>(`/api/twins/${twinId}/family/${familyId}`);
+            
+            if (response.success && response.data) {
+                // Map the response to the expected frontend format
+                const familyMember = response.data.family;
+                const mappedMember: FamilyMember = {
+                    id: familyMember.id,
+                    twinId: familyMember.twinId,
+                    // New API fields
+                    parentesco: familyMember.parentesco,
+                    nombre: familyMember.nombre,
+                    apellido: familyMember.apellido,
+                    fechaNacimiento: familyMember.fechaNacimiento,
+                    numeroCelular: familyMember.numeroCelular,
+                    email: familyMember.email,
+                    urlFoto: familyMember.urlFoto,
+                    notas: familyMember.notas,
+                    createdDate: familyMember.createdDate,
+                    
+                    // Additional fields for edit page
+                    idiomas: familyMember.idiomas || [],
+                    intereses: familyMember.intereses || [],
+                    direccionCompleta: familyMember.direccionCompleta || "",
+                    paisNacimiento: familyMember.paisNacimiento || "",
+                    nacionalidad: familyMember.nacionalidad || "",
+                    genero: familyMember.genero || "",
+                    ocupacion: familyMember.ocupacion || "",
+                    nombreTwin: familyMember.nombreTwin || "",
+                    telefono: familyMember.telefono || familyMember.numeroCelular || "",
+                    
+                    // Legacy fields for backward compatibility
+                    firstName: familyMember.nombre,
+                    lastName: familyMember.apellido,
+                    relationshipType: familyMember.parentesco,
+                    dateOfBirth: familyMember.fechaNacimiento,
+                    phoneNumber: familyMember.numeroCelular,
+                    photoUrl: familyMember.urlFoto,
+                    notes: familyMember.notas,
+                    createdAt: familyMember.createdDate
+                };
+
+                return {
+                    success: true,
+                    data: mappedMember,
+                    error: undefined
+                };
+            } else {
+                return {
+                    success: false,
+                    data: undefined,
+                    error: response.error || 'Error al obtener miembro de familia'
+                };
+            }
+        } catch (error) {
+            console.error('❌ Error getting family member by ID:', error);
+            return {
+                success: false,
+                data: undefined,
+                error: 'Error al obtener miembro de familia'
+            };
+        }
+    }
+
+    /**
      * Update an existing family member (actualizada para nueva API)
      */
     async updateFamilyMember(twinId: string, familyMemberId: string, familyMemberData: Partial<FamilyMember>): Promise<ApiResponse<FamilyMember>> {
@@ -1832,6 +1946,73 @@ class TwinApiService {
             }
         } catch (error) {
             console.error('❌ Error updating family member:', error);
+            return {
+                success: false,
+                data: undefined,
+                error: 'Error al actualizar miembro de familia'
+            };
+        }
+    }
+
+    /**
+     * Update family member using new FamilyData structure
+     * PUT /api/twins/{twinId}/family/{familyId}
+     */
+    async updateFamilyMemberWithFamilyData(twinId: string, familyMemberId: string, familyData: Partial<FamilyData>): Promise<ApiResponse<FamilyMember>> {
+        console.log('📤 API Service - Updating family member with FamilyData structure:', familyMemberId, 'for twin:', twinId);
+        console.log('📤 Family data being sent:', familyData);
+        
+        try {
+            const response = await this.makeRequest<{
+                success: boolean;
+                family: FamilyMember;
+                message: string;
+            }>(`/api/twins/${twinId}/family/${familyMemberId}`, {
+                method: 'PUT',
+                body: JSON.stringify(familyData)
+            });
+            
+            if (response.success && response.data) {
+                const familyMember = response.data.family;
+                const mappedMember: FamilyMember = {
+                    id: familyMember.id,
+                    twinId: familyMember.twinId,
+                    // Map from backend response
+                    parentesco: familyMember.parentesco,
+                    nombre: familyMember.nombre,
+                    apellido: familyMember.apellido,
+                    fechaNacimiento: familyMember.fechaNacimiento,
+                    numeroCelular: familyMember.numeroCelular,
+                    email: familyMember.email,
+                    urlFoto: familyMember.urlFoto,
+                    notas: familyMember.notas,
+                    createdDate: familyMember.createdDate,
+                    type: familyMember.type,
+                    // Legacy fields for compatibility
+                    firstName: familyMember.nombre,
+                    lastName: familyMember.apellido,
+                    relationshipType: familyMember.parentesco,
+                    dateOfBirth: familyMember.fechaNacimiento,
+                    phoneNumber: familyMember.numeroCelular,
+                    photoUrl: familyMember.urlFoto,
+                    notes: familyMember.notas,
+                    createdAt: familyMember.createdDate
+                };
+
+                return {
+                    success: true,
+                    data: mappedMember,
+                    error: undefined
+                };
+            } else {
+                return {
+                    success: false,
+                    data: undefined,
+                    error: response.error || 'Error al actualizar miembro de familia'
+                };
+            }
+        } catch (error) {
+            console.error('❌ Error updating family member with FamilyData:', error);
             return {
                 success: false,
                 data: undefined,
