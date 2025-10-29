@@ -36,6 +36,23 @@ export default defineConfig({
                         console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
                     });
                 }
+            },
+            "/agents-api": {
+                target: "http://localhost:7257",
+                changeOrigin: true,
+                secure: false,
+                rewrite: (path) => path.replace(/^\/agents-api/, '/api'),
+                configure: (proxy, _options) => {
+                    proxy.on('error', (err, _req, _res) => {
+                        console.log('agents proxy error', err);
+                    });
+                    proxy.on('proxyReq', (proxyReq, req, _res) => {
+                        console.log('Sending Request to Agents Backend:', req.method, req.url);
+                    });
+                    proxy.on('proxyRes', (proxyRes, req, _res) => {
+                        console.log('Received Response from Agents Backend:', proxyRes.statusCode, req.url);
+                    });
+                }
             }
         }
     }

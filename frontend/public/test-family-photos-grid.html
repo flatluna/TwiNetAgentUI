@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Cuadrícula de Fotos Familiares</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #f8fafc;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #1e293b;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖼️ Ejemplo: Cuadrícula de Fotos Familiares</h1>
+        
+        <!-- Contenedor principal simplificado -->
+        <div style="background:white;border-radius:12px;padding:16px;margin:8px 0;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+          <!-- Header -->
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #f3f4f6;">
+            <img src="/src/assets/Logo.png" alt="Logo" style="width:24px;height:24px;border-radius:50%;background:#ddd;" />
+            <div>
+              <h3 style="color:#1f2937;font-size:16px;font-weight:600;margin:0;">📸 Fotos Familiares</h3>
+              <p style="color:#6b7280;font-size:12px;margin:0;">6 fotos encontradas</p>
+            </div>
+          </div>
+          
+          <!-- Grid de fotos -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
+            
+            <!-- Foto 1 -->
+            <div style="background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;cursor:pointer;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+              <div style="width:100%;height:200px;background:linear-gradient(45deg,#ff6b6b,#feca57);display:flex;align-items:center;justify-content:center;color:white;font-size:48px;">📷</div>
+              <div style="padding:12px;">
+                <div style="font-weight:600;color:#1f2937;font-size:14px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="vacaciones_playa_2023.jpg">vacaciones_playa_2023.jpg</div>
+                <div style="color:#6b7280;font-size:11px;line-height:1.3;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">Una hermosa foto familiar en la playa durante nuestras vacaciones de verano. Todos estamos sonriendo y disfrutando del sol.</div>
+                <div style="color:#9ca3af;font-size:10px;display:flex;align-items:center;gap:4px;">
+                  <span style="width:6px;height:6px;background:#10b981;border-radius:50%;"></span>
+                  Foto familiar
+                </div>
+              </div>
+            </div>
+
+            <!-- Foto 2 -->
+            <div style="background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;cursor:pointer;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+              <div style="width:100%;height:200px;background:linear-gradient(45deg,#5f27cd,#341f97);display:flex;align-items:center;justify-content:center;color:white;font-size:48px;">🎂</div>
+              <div style="padding:12px;">
+                <div style="font-weight:600;color:#1f2937;font-size:14px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="cumpleanos_mama_2024.jpg">cumpleanos_mama_2024.jpg</div>
+                <div style="color:#6b7280;font-size:11px;line-height:1.3;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">Celebrando el cumpleaños de mamá con toda la familia reunida. Una ocasión muy especial llena de alegría y amor.</div>
+                <div style="color:#9ca3af;font-size:10px;display:flex;align-items:center;gap:4px;">
+                  <span style="width:6px;height:6px;background:#10b981;border-radius:50%;"></span>
+                  Foto familiar
+                </div>
+              </div>
+            </div>
+
+            <!-- Foto 3 -->
+            <div style="background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;cursor:pointer;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+              <div style="width:100%;height:200px;background:linear-gradient(45deg,#00d2d3,#54a0ff);display:flex;align-items:center;justify-content:center;color:white;font-size:48px;">🏠</div>
+              <div style="padding:12px;">
+                <div style="font-weight:600;color:#1f2937;font-size:14px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="reunion_familiar_navidad.jpg">reunion_familiar_navidad.jpg</div>
+                <div style="color:#6b7280;font-size:11px;line-height:1.3;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">Nuestra tradicional reunión navideña en casa. Toda la familia junta compartiendo momentos especiales durante las fiestas.</div>
+                <div style="color:#9ca3af;font-size:10px;display:flex;align-items:center;gap:4px;">
+                  <span style="width:6px;height:6px;background:#10b981;border-radius:50%;"></span>
+                  Foto familiar
+                </div>
+              </div>
+            </div>
+
+            <!-- Foto 4 -->
+            <div style="background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;cursor:pointer;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+              <div style="width:100%;height:200px;background:linear-gradient(45deg,#ff9ff3,#f368e0);display:flex;align-items:center;justify-content:center;color:white;font-size:48px;">🎓</div>
+              <div style="padding:12px;">
+                <div style="font-weight:600;color:#1f2937;font-size:14px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="graduacion_hermana_2022.jpg">graduacion_hermana_2022.jpg</div>
+                <div style="color:#6b7280;font-size:11px;line-height:1.3;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">El día de la graduación de mi hermana. Un momento de orgullo familiar que quedará grabado para siempre en nuestros corazones.</div>
+                <div style="color:#9ca3af;font-size:10px;display:flex;align-items:center;gap:4px;">
+                  <span style="width:6px;height:6px;background:#10b981;border-radius:50%;"></span>
+                  Foto familiar
+                </div>
+              </div>
+            </div>
+
+            <!-- Foto 5 -->
+            <div style="background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;cursor:pointer;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+              <div style="width:100%;height:200px;background:linear-gradient(45deg,#f093fb,#f5576c);display:flex;align-items:center;justify-content:center;color:white;font-size:48px;">🌄</div>
+              <div style="padding:12px;">
+                <div style="font-weight:600;color:#1f2937;font-size:14px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="viaje_montana_familia.jpg">viaje_montana_familia.jpg</div>
+                <div style="color:#6b7280;font-size:11px;line-height:1.3;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">Aventura familiar en las montañas. Disfrutando de la naturaleza y creando recuerdos inolvidables en un paisaje espectacular.</div>
+                <div style="color:#9ca3af;font-size:10px;display:flex;align-items:center;gap:4px;">
+                  <span style="width:6px;height:6px;background:#10b981;border-radius:50%;"></span>
+                  Foto familiar
+                </div>
+              </div>
+            </div>
+
+            <!-- Foto 6 -->
+            <div style="background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;cursor:pointer;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+              <div style="width:100%;height:200px;background:linear-gradient(45deg,#4facfe,#00f2fe);display:flex;align-items:center;justify-content:center;color:white;font-size:48px;">🎪</div>
+              <div style="padding:12px;">
+                <div style="font-weight:600;color:#1f2937;font-size:14px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="feria_familia_divertida.jpg">feria_familia_divertida.jpg</div>
+                <div style="color:#6b7280;font-size:11px;line-height:1.3;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">Día divertido en la feria local. Todos disfrutando de los juegos, la comida y las atracciones en un ambiente festivo y alegre.</div>
+                <div style="color:#9ca3af;font-size:10px;display:flex;align-items:center;gap:4px;">
+                  <span style="width:6px;height:6px;background:#10b981;border-radius:50%;"></span>
+                  Foto familiar
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div style="margin-top: 30px; padding: 20px; background: #e2e8f0; border-radius: 12px;">
+            <h3 style="color: #1e293b; margin-top: 0;">📋 Información técnica:</h3>
+            <ul style="color: #64748b; line-height: 1.6;">
+                <li><strong>Datos procesados:</strong> Array de objetos PhotoRecord del backend</li>
+                <li><strong>Campos mostrados:</strong> filename y pictureURL</li>
+                <li><strong>Layout:</strong> CSS Grid responsivo (minimo 250px por tarjeta)</li>
+                <li><strong>Efectos:</strong> Hover con transform scale y shadow</li>
+                <li><strong>Imágenes:</strong> Cargadas desde URLs SAS del Azure Storage</li>
+                <li><strong>Error handling:</strong> Placeholder si la imagen no carga</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

@@ -238,7 +238,8 @@ export interface ResumeListResponse {
 
 // Interfaces para ImageAI - Análisis de fotos familiares con IA
 export interface ImageAI {
-    detailsHTML: string;
+    detailsHTML?: string;  // Campo legacy
+    pictureContentHTML?: string;  // Campo actual del API
     descripcionGenerica: string;
     descripcionUsuario?: string;  // Descripción del usuario
     descripcionDetallada?: string | null;
@@ -597,9 +598,15 @@ class TwinApiService {
             };
 
             console.log(`🔄 Making API request to: ${url}`);
+            console.log(`🔧 API_BASE_URL: "${API_BASE_URL}"`);
+            console.log(`🔧 Full endpoint: "${endpoint}"`);
+            console.log(`🔧 HTTP Method: ${config.method || 'GET'}`);
             console.log('📋 Request config:', config);
 
             const response = await fetch(url, config);
+            
+            console.log(`📡 Response status: ${response.status} ${response.statusText}`);
+            console.log(`📡 Response headers:`, Object.fromEntries(response.headers.entries()));
             
             if (!response.ok) {
                 const errorText = await response.text();
@@ -1383,9 +1390,19 @@ class TwinApiService {
         success: boolean;
         message: string;
     }>> {
-        return this.makeRequest(`/api/twins/${twinId}/photos/${photoId}`, {
-            method: 'DELETE'
+        console.log(`🗑️ Deleting family photo: twinId=${twinId}, photoId=${photoId}`);
+        console.log(`🔗 Calling endpoint: delete /api/twins/${twinId}/family-photos/${photoId}`);
+        console.log(`🎯 This should match Azure Function route: twins/{twinId}/family-photos/{photoId}`);
+        
+        const result = await this.makeRequest<{
+            success: boolean;
+            message: string;
+        }>(`/api/twins/${twinId}/family-photos/${photoId}`, {
+            method: 'delete'  // Lowercase to match Azure Function HttpTrigger exactly
         });
+        
+        console.log('🗑️ Delete API response:', result);
+        return result;
     }
 
     /**

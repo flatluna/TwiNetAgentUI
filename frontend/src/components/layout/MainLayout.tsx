@@ -221,6 +221,14 @@ const MainLayout: React.FC = () => {
             description: "Vista general del sistema"
         },
         {
+            id: "twin-agents-network",
+            label: "TwinAgent Network",
+            icon: Network,
+            path: "/twin-agents-network",
+            description: "Red de agentes AI especializados",
+            logoIcon: logoPng
+        },
+        {
             id: "mi-twin",
             label: "Mi Twin Personal",
             icon: User,
@@ -251,7 +259,7 @@ const MainLayout: React.FC = () => {
             id: "twin-agents-net",
             label: "Twin Agents Net",
             icon: Network,
-            path: "/twin-agents-net",
+            path: "/twin-agents-network",
             description: "Red de agentes Twin AI",
             submenu: [
                 {
@@ -352,6 +360,7 @@ const MainLayout: React.FC = () => {
     const getIconColor = (itemId: string) => {
         const colors = {
             "dashboard": "text-blue-400 hover:text-blue-300",
+            "twin-agents-network": "text-indigo-400 hover:text-indigo-300",
             "mi-twin": "text-green-400 hover:text-green-300",
             "twin-agents-net": "text-cyan-400 hover:text-cyan-300",
             "mi-familia": "text-purple-400 hover:text-purple-300",
@@ -458,10 +467,18 @@ const MainLayout: React.FC = () => {
                                         }}
                                         title={item.label}
                                     >
-                                        <item.icon 
-                                            className={`mr-2 ${getIconColor(item.id)}`} 
-                                            size={sidebarOpen ? (isMobile ? 20 : 18) : (isMobile ? 24 : 22)} 
-                                        />
+                                        {item.logoIcon ? (
+                                            <img 
+                                                src={item.logoIcon} 
+                                                alt={item.label}
+                                                className={`mr-2 rounded-full bg-white p-0.5 ${sidebarOpen ? 'w-5 h-5' : 'w-6 h-6'}`}
+                                            />
+                                        ) : (
+                                            <item.icon 
+                                                className={`mr-2 ${getIconColor(item.id)}`} 
+                                                size={sidebarOpen ? (isMobile ? 20 : 18) : (isMobile ? 24 : 22)} 
+                                            />
+                                        )}
                                         {sidebarOpen && <span className="truncate">{item.label}</span>}
                                     </Button>
                                     {item.submenu && sidebarOpen && (

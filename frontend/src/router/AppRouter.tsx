@@ -95,6 +95,8 @@ import DocumentosNoEstructuradosNew from "@/pages/DocumentosNoEstructurados";
 import DocumentoViewer from "@/pages/DocumentoViewerNew";
 import FacturasPage from "@/pages/biografia/FacturasPage";
 import InvoicesDashboardPage from "@/pages/biografia/InvoicesDashboardPage";
+import TwinAgentsNetwork from "@/pages/TwinAgentsNetwork";
+import SpecificTwinAgentPage from "@/pages/SpecificTwinAgentPage";
 
 // Configuración de rutas
 const router = createBrowserRouter([
@@ -114,6 +116,14 @@ const router = createBrowserRouter([
             {
                 path: "dashboard",
                 element: <ProtectedRoute><DashboardPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-agents-network",
+                element: <ProtectedRoute><TwinAgentsNetwork /></ProtectedRoute>,
+            },
+            {
+                path: "agents",
+                element: <ProtectedRoute><TwinAgentsNetwork /></ProtectedRoute>,
             },
             // Rutas protegidas
             {
@@ -442,6 +452,10 @@ const router = createBrowserRouter([
             {
                 path: "twin-agent",
                 element: <ProtectedRoute><TwinAgentPage /></ProtectedRoute>,
+            },
+            {
+                path: "twin-agent/:agentId",
+                element: <ProtectedRoute><SpecificTwinAgentPage /></ProtectedRoute>,
             },
             {
                 path: "ai-web-search",
