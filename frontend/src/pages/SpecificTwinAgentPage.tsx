@@ -107,6 +107,12 @@ const SpecificTwinAgentPage: React.FC = () => {
 
   useEffect(() => {
     if (agentId && agentConfigs[agentId]) {
+      // Redirección especial para structured-docs
+      if (agentId === 'structured-docs') {
+        navigate('/twin-biografia/archivos-personales/estructurados/csv');
+        return;
+      }
+      
       setAgentInfo(agentConfigs[agentId]);
       // Limpiar conversación y thread al cambiar de agente
       setMessages([]);
